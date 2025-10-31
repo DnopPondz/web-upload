@@ -6,7 +6,14 @@ import Head from "next/head"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/router"
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type FormEvent,
+} from "react"
 import Bridge from "../components/Icons/Bridge"
 import Modal from "../components/Modal"
 import cloudinary from "../utils/cloudinary"
@@ -18,6 +25,20 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const router = useRouter()
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
 
+  const [imageData, setImageData] = useState(images)
+  const [albumFilter, setAlbumFilter] = useState<string>("__all__")
+  const [editingImageId, setEditingImageId] = useState<number | null>(null)
+  const [editAlbum, setEditAlbum] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [savingImageId, setSavingImageId] = useState<number | null>(null)
+  const [metadataStatus, setMetadataStatus] = useState<
+    { type: "success" | "error"; message: string } | null
+  >(null)
+
+  useEffect(() => {
+    setImageData(images)
+  }, [images])
+
   const sizePresets = {
     small: { label: "เล็ก", width: 480, height: 320 },
     medium: { label: "กลาง", width: 720, height: 480 },
@@ -27,6 +48,64 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   type ThumbSizeKey = keyof typeof sizePresets
 
   type LayoutKey = "row" | "grid" | "flex" | "random"
+
+  const layoutSizeClasses: Record<
+    LayoutKey,
+    {
+      container: Record<ThumbSizeKey, string>
+      card: Record<ThumbSizeKey, string>
+    }
+  > = {
+    grid: {
+      container: {
+        small:
+          "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+        medium: "grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3",
+        large: "grid grid-cols-1 gap-6 sm:grid-cols-1 xl:grid-cols-2",
+      },
+      card: {
+        small: "w-full",
+        medium: "w-full",
+        large: "w-full",
+      },
+    },
+    flex: {
+      container: {
+        small: "flex flex-wrap gap-6",
+        medium: "flex flex-wrap gap-6",
+        large: "flex flex-wrap gap-6",
+      },
+      card: {
+        small: "w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)] 2xl:w-[calc(20%-19px)]",
+        medium: "w-full sm:w-[calc(50%-12px)] xl:w-[calc(33.333%-16px)]",
+        large: "w-full sm:w-[calc(66.666%-16px)] xl:w-[calc(50%-18px)]",
+      },
+    },
+    row: {
+      container: {
+        small: "flex flex-col gap-6",
+        medium: "flex flex-col gap-6",
+        large: "flex flex-col gap-6",
+      },
+      card: {
+        small: "w-full",
+        medium: "w-full",
+        large: "w-full",
+      },
+    },
+    random: {
+      container: {
+        small: "columns-1 gap-6 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]",
+        medium: "columns-1 gap-6 sm:columns-2 xl:columns-3 2xl:columns-4 [column-fill:_balance]",
+        large: "columns-1 gap-6 sm:columns-1 xl:columns-2 2xl:columns-3 [column-fill:_balance]",
+      },
+      card: {
+        small: "mb-6 break-inside-avoid",
+        medium: "mb-6 break-inside-avoid",
+        large: "mb-6 break-inside-avoid",
+      },
+    },
+  }
 
   const layoutOptions: Array<{ key: LayoutKey; label: string }> = [
     { key: "grid", label: "ตาราง" },
@@ -47,49 +126,94 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const longPressTriggeredRef = useRef(false)
   const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
 
-  const getSizeForImage = (id: string): ThumbSizeKey => {
+  const fallbackAlbumKey = "__ungrouped__"
+  const fallbackAlbumLabel = "ไม่ระบุกลุ่ม"
+
+  const getAlbumKey = (value?: string | null) => {
+    const trimmed = (value ?? "").trim()
+    return trimmed === "" ? fallbackAlbumKey : trimmed
+  }
+
+  const albumOptions = useMemo(
+    () => {
+      const groups = new Map<string, string>()
+      imageData.forEach((image) => {
+        const key = getAlbumKey(image.album)
+        const label = key === fallbackAlbumKey ? fallbackAlbumLabel : (image.album ?? "").trim()
+        if (!groups.has(key)) {
+          groups.set(key, label)
+        }
+      })
+
+      return [
+        { key: "__all__", label: "ทั้งหมด" },
+        ...Array.from(groups.entries())
+          .sort((a, b) => a[1].localeCompare(b[1], "th"))
+          .map(([key, label]) => ({ key, label })),
+      ]
+    },
+    [imageData],
+  )
+
+  const filteredImages = useMemo(
+    () => {
+      if (albumFilter === "__all__") {
+        return imageData
+      }
+
+      return imageData.filter((image) => getAlbumKey(image.album) === albumFilter)
+    },
+    [albumFilter, imageData],
+  )
+
+  useEffect(() => {
+    if (albumFilter === "__all__") return
+
+    const hasAlbum = imageData.some((image) => getAlbumKey(image.album) === albumFilter)
+
+    if (!hasAlbum) {
+      setAlbumFilter("__all__")
+    }
+  }, [albumFilter, imageData])
+
+  useEffect(() => {
+    if (!editMode) {
+      setEditingImageId(null)
+      setSavingImageId(null)
+    }
+  }, [editMode])
+
+  useEffect(() => {
+    if (!metadataStatus) return
+
+    const timeout = setTimeout(() => {
+      setMetadataStatus(null)
+    }, 4000)
+
+    return () => clearTimeout(timeout)
+  }, [metadataStatus])
+
+  const getSizeForImage = (id: number): ThumbSizeKey => {
     if (layoutStyle !== "random") {
       return thumbSize
     }
 
     const hash = id
+      .toString()
       .split("")
       .reduce((acc, char) => acc + char.charCodeAt(0), 0)
     return randomSizes[hash % randomSizes.length]
   }
 
-  const containerClass = (() => {
-    switch (layoutStyle) {
-      case "row":
-        return "flex flex-col gap-6"
-      case "flex":
-        return "flex flex-wrap gap-6"
-      case "random":
-        return "columns-1 gap-6 sm:columns-2 xl:columns-3 2xl:columns-4 [column-fill:_balance]"
-      case "grid":
-      default:
-        return "grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3"
-    }
-  })()
+  const containerClass = layoutSizeClasses[layoutStyle].container[thumbSize]
 
   const baseCardClass = `group relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-[0_22px_45px_rgba(0,0,0,0.45)] transition-all duration-500 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_35px_80px_rgba(0,0,0,0.55)]${
     editMode ? " animate-wiggle" : ""
   }`
 
-  const cardLayoutClass = (() => {
-    switch (layoutStyle) {
-      case "flex":
-        return "w-full sm:w-[calc(50%-12px)] xl:w-[calc(33.333%-16px)]"
-      case "random":
-        return "mb-6 break-inside-avoid"
-      case "row":
-      case "grid":
-      default:
-        return "w-full"
-    }
-  })()
+  const cardLayoutClass = layoutSizeClasses[layoutStyle].card[thumbSize]
 
-  const totalPhotos = images.length
+  const totalPhotos = imageData.length
   const formattedTotalPhotos = totalPhotos.toLocaleString("th-TH")
   const activeLayoutLabel =
     layoutOptions.find((option) => option.key === layoutStyle)?.label || layoutStyle
@@ -102,7 +226,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
     }`
 
   const { photoId } = router.query
-  const currentPhoto = images.find((img) => img.id === photoId) || null
+  const currentPhoto = imageData.find((img) => img.id === Number(photoId)) || null
 
   // --- Upload handler ---
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,6 +332,72 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
     }
   }
 
+  const handleStartMetadataEdit = (image: ImageProps) => {
+    setEditingImageId(image.id)
+    setEditAlbum(image.album ?? "")
+    setEditDescription(image.description ?? "")
+    setMetadataStatus(null)
+  }
+
+  const handleCancelMetadataEdit = () => {
+    setEditingImageId(null)
+    setEditAlbum("")
+    setEditDescription("")
+  }
+
+  const handleSubmitMetadata = async (
+    event: FormEvent<HTMLFormElement>,
+    image: ImageProps,
+  ) => {
+    event.preventDefault()
+
+    const albumValue = editAlbum.trim()
+    const descriptionValue = editDescription.trim()
+
+    setSavingImageId(image.id)
+    setMetadataStatus(null)
+
+    try {
+      const res = await fetch("/api/update-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          public_id: image.public_id,
+          album: albumValue,
+          description: descriptionValue,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "" }))
+        throw new Error(errorData.error || "บันทึกข้อมูลไม่สำเร็จ")
+      }
+
+      setImageData((prev) =>
+        prev.map((img) =>
+          img.id === image.id
+            ? { ...img, album: albumValue, description: descriptionValue }
+            : img,
+        ),
+      )
+
+      setMetadataStatus({
+        type: "success",
+        message: "บันทึกข้อมูลรูปเรียบร้อยแล้ว",
+      })
+      setEditingImageId(null)
+      setEditAlbum("")
+      setEditDescription("")
+    } catch (error: any) {
+      setMetadataStatus({
+        type: "error",
+        message: error.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล",
+      })
+    } finally {
+      setSavingImageId(null)
+    }
+  }
+
   const handleExitEdit = (event: ReactMouseEvent<HTMLElement>) => {
     if (!editMode) return
 
@@ -241,13 +431,26 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 pb-20 pt-12 sm:px-6 lg:px-8">
           {photoId && (
             <Modal
-              images={images}
+              images={imageData}
               currentPhoto={currentPhoto}
               onClose={() => {
                 setLastViewedPhoto(photoId)
                 router.push("/", undefined, { shallow: true })
               }}
             />
+          )}
+
+          {metadataStatus && (
+            <div
+              className={`rounded-2xl border p-4 text-sm backdrop-blur ${
+                metadataStatus.type === "success"
+                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+                  : "border-red-400/40 bg-red-500/10 text-red-100"
+              }`}
+              data-edit-keep
+            >
+              {metadataStatus.message}
+            </div>
           )}
 
           <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:p-10">
@@ -350,41 +553,74 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex flex-wrap items-center gap-2" data-edit-keep>
-                  {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
-                    const isActive = thumbSize === key
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setThumbSize(key)}
-                        aria-pressed={isActive}
-                        className={filterButtonClass(isActive)}
-                        data-edit-keep
-                      >
-                        {sizePresets[key].label}
-                      </button>
-                    )
-                  })}
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="flex flex-col gap-2" data-edit-keep>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                    ขนาดรูปตัวอย่าง
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
+                      const isActive = thumbSize === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setThumbSize(key)}
+                          aria-pressed={isActive}
+                          className={filterButtonClass(isActive)}
+                          data-edit-keep
+                        >
+                          {sizePresets[key].label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2" data-edit-keep>
-                  {layoutOptions.map(({ key, label }) => {
-                    const isActive = layoutStyle === key
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setLayoutStyle(key)}
-                        aria-pressed={isActive}
-                        className={filterButtonClass(isActive)}
-                        data-edit-keep
-                      >
-                        {label}
-                      </button>
-                    )
-                  })}
+                <div className="flex flex-col gap-2" data-edit-keep>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                    รูปแบบการจัดเรียง
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {layoutOptions.map(({ key, label }) => {
+                      const isActive = layoutStyle === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setLayoutStyle(key)}
+                          aria-pressed={isActive}
+                          className={filterButtonClass(isActive)}
+                          data-edit-keep
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2" data-edit-keep>
+                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                    กลุ่มรูปภาพ
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {albumOptions.map(({ key, label }) => {
+                      const isActive = albumFilter === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setAlbumFilter(key)}
+                          aria-pressed={isActive}
+                          className={filterButtonClass(isActive)}
+                          data-edit-keep
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -396,9 +632,17 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
 
           <section>
             <div className={containerClass}>
-              {images.map(({ id, public_id, format, blurDataUrl }) => {
+              {filteredImages.map((image) => {
+                const { id, public_id, format, blurDataUrl, album, description } = image
                 const sizeKey = getSizeForImage(id)
                 const { width, height } = sizePresets[sizeKey]
+                const albumLabel =
+                  getAlbumKey(album) === fallbackAlbumKey
+                    ? fallbackAlbumLabel
+                    : (album ?? "").trim()
+                const descriptionText = (description ?? "").trim()
+                const isEditingMetadata = editingImageId === id
+                const isSavingMetadata = savingImageId === id
 
                 return (
                   <div
@@ -423,10 +667,13 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                           return
                         }
 
-                        setLastViewedPhoto(id)
+                        setLastViewedPhoto(id.toString())
                       }}
                     >
-                      <div className="relative overflow-hidden">
+                      <div
+                        className="relative overflow-hidden"
+                        style={{ aspectRatio: `${width}/${height}` }}
+                      >
                         <Image
                           alt="ภาพจากแกลเลอรี"
                           className="h-full w-full transform object-cover transition duration-500 will-change-transform group-hover:scale-[1.02] group-hover:brightness-110"
@@ -443,6 +690,101 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                       </div>
                     </Link>
 
+                    <div
+                      className="flex flex-col gap-3 border-t border-white/5 bg-black/35 px-5 py-4 text-left"
+                      data-editable-card
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
+                          กลุ่ม
+                        </span>
+                        <span className="text-sm font-medium text-white/80">{albumLabel}</span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                          คำอธิบายรูป
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-white/70">
+                          {descriptionText || "ยังไม่มีคำอธิบายสำหรับรูปนี้"}
+                        </p>
+                      </div>
+
+                      {editMode && (
+                        <div className="mt-2" data-editable-card>
+                          {isEditingMetadata ? (
+                            <form
+                              className="flex flex-col gap-3"
+                              onSubmit={(event) => handleSubmitMetadata(event, image)}
+                              data-editable-card
+                            >
+                              <div className="flex flex-col gap-1">
+                                <label
+                                  htmlFor={`album-${id}`}
+                                  className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45"
+                                >
+                                  กลุ่ม
+                                </label>
+                                <input
+                                  id={`album-${id}`}
+                                  type="text"
+                                  value={editAlbum}
+                                  onChange={(event) => setEditAlbum(event.target.value)}
+                                  placeholder="เช่น งานเลี้ยง, เวิร์กช็อป"
+                                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60"
+                                  data-editable-card
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label
+                                  htmlFor={`description-${id}`}
+                                  className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45"
+                                >
+                                  คำอธิบายรูป
+                                </label>
+                                <textarea
+                                  id={`description-${id}`}
+                                  value={editDescription}
+                                  onChange={(event) => setEditDescription(event.target.value)}
+                                  placeholder="เพิ่มรายละเอียดหรือเรื่องราวของภาพ"
+                                  rows={3}
+                                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60"
+                                  data-editable-card
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelMetadataEdit}
+                                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                  disabled={isSavingMetadata}
+                                >
+                                  ยกเลิก
+                                </button>
+                                <button
+                                  type="submit"
+                                  className="rounded-full bg-cyan-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
+                                  disabled={isSavingMetadata}
+                                >
+                                  {isSavingMetadata ? "กำลังบันทึก..." : "บันทึก"}
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleStartMetadataEdit(image)}
+                              className="w-full rounded-xl border border-white/15 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white/80 transition hover:border-white/35 hover:bg-white/[0.08] hover:text-white"
+                              data-editable-card
+                            >
+                              แก้ไขรายละเอียด
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {editMode && (
                       <button
                         type="button"
@@ -451,7 +793,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                           event.preventDefault()
                           event.stopPropagation()
                           setDeleteError(null)
-                          setDeleteTarget({ id, publicId: public_id })
+                          setDeleteTarget({ id: id.toString(), publicId: public_id })
                         }}
                         className="pointer-events-auto absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-red-400/50 bg-red-500/15 px-3 py-1 text-xs font-medium text-red-100 backdrop-blur transition hover:border-red-300 hover:bg-red-500/25"
                       >
@@ -554,19 +896,53 @@ export default Home
 export async function getServerSideProps() {
   const results = await cloudinary.search
     .expression("tags=nextjs-conf")
+    .with_field("context")
     .sort_by("public_id", "desc")
     .max_results(400)
     .execute()
 
+  const publicIds = results.resources.map((result: any) => result.public_id)
+
+  const metadataMap = new Map<string, { album?: string; description?: string }>()
+
+  if (process.env.MONGODB_URI && publicIds.length > 0) {
+    try {
+      const { default: clientPromise } = await import("../utils/mongodb")
+      const client = await clientPromise
+      const db = client.db(process.env.MONGODB_DB || "img-detail")
+      const collection = db.collection<{
+        public_id: string
+        album?: string
+        description?: string
+      }>("photoMetadata")
+
+      const documents = await collection
+        .find({ public_id: { $in: publicIds } })
+        .toArray()
+
+      documents.forEach((doc) => {
+        metadataMap.set(doc.public_id, {
+          album: doc.album ?? "",
+          description: doc.description ?? "",
+        })
+      })
+    } catch (error) {
+      console.error("Failed to load MongoDB metadata:", error)
+    }
+  }
+
   let reducedResults: ImageProps[] = []
   let i = 0
   for (let result of results.resources) {
+    const metadata = metadataMap.get(result.public_id)
     reducedResults.push({
-      id: i.toString(),
+      id: i,
       height: result.height,
       width: result.width,
       public_id: result.public_id,
       format: result.format,
+      album: metadata?.album ?? result?.context?.custom?.album ?? "",
+      description: metadata?.description ?? result?.context?.custom?.description ?? "",
     })
     i++
   }
