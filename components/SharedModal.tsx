@@ -8,13 +8,33 @@ import {
 } from "@heroicons/react/24/outline";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import Image from "next/image";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSwipeable } from "react-swipeable";
 import { variants } from "../utils/animationVariants";
 import downloadPhoto from "../utils/downloadPhoto";
 import { range } from "../utils/range";
 import type { ImageProps, SharedModalProps } from "../utils/types";
 import Twitter from "./Icons/Twitter";
+
+const SIZE_OPTIONS = {
+  small: {
+    label: "เล็ก",
+    width: 960,
+    height: 640,
+  },
+  medium: {
+    label: "กลาง",
+    width: 1280,
+    height: 853,
+  },
+  large: {
+    label: "ใหญ่",
+    width: 1920,
+    height: 1280,
+  },
+} as const;
+
+type SizeKey = keyof typeof SIZE_OPTIONS;
 
 export default function SharedModal({
   index,
@@ -26,6 +46,14 @@ export default function SharedModal({
   direction,
 }: SharedModalProps) {
   const [loaded, setLoaded] = useState(false);
+  const [sizeKey, setSizeKey] = useState<SizeKey>(
+    navigation ? "medium" : "large",
+  );
+
+  const { width: selectedWidth, height: selectedHeight } = useMemo(
+    () => SIZE_OPTIONS[sizeKey],
+    [sizeKey],
+  );
 
   let filteredImages = images?.filter((img: ImageProps) =>
     range(index - 15, index + 15).includes(img.id),
@@ -74,11 +102,11 @@ export default function SharedModal({
                 <Image
                   src={`https://res.cloudinary.com/${
                     process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
-                  }/image/upload/c_scale,${navigation ? "w_1280" : "w_1920"}/${
+                  }/image/upload/c_scale,w_${selectedWidth}/${
                     currentImage.public_id
                   }.${currentImage.format}`}
-                  width={navigation ? 1280 : 1920}
-                  height={navigation ? 853 : 1280}
+                  width={selectedWidth}
+                  height={selectedHeight}
                   priority
                   alt="Next.js Conf image"
                   onLoad={() => setLoaded(true)}
@@ -93,6 +121,26 @@ export default function SharedModal({
           {/* Buttons */}
           {loaded && (
             <div className="relative aspect-[3/2] max-h-full w-full">
+              <div className="pointer-events-auto absolute left-1/2 top-3 flex -translate-x-1/2 gap-2 rounded-full bg-black/50 p-1 text-xs font-medium text-white/80 backdrop-blur-md">
+                {(Object.keys(SIZE_OPTIONS) as SizeKey[]).map((key) => {
+                  const option = SIZE_OPTIONS[key];
+                  const isActive = key === sizeKey;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSizeKey(key)}
+                      className={`${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "text-white/70 hover:text-white"
+                      } rounded-full px-3 py-1 transition`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
               {navigation && (
                 <>
                   {index > 0 && (
