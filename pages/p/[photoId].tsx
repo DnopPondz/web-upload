@@ -57,6 +57,8 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
       width: result.width,
       public_id: result.public_id,
       format: result.format,
+      album: result?.context?.custom?.album ?? "",
+      description: result?.context?.custom?.description ?? "",
     }));
 
     const currentPhoto = reducedResults.find(
