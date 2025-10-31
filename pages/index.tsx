@@ -7,7 +7,6 @@ import Link from "next/link"
 import { useRouter } from "next/router"
 import { useState, useRef } from "react"
 import Bridge from "../components/Icons/Bridge"
-import Logo from "../components/Icons/Logo"
 import Modal from "../components/Modal"
 import cloudinary from "../utils/cloudinary"
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder"
@@ -120,13 +119,17 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
               </span>
               <span className="absolute left-0 right-0 bottom-0 h-[400px] bg-gradient-to-b from-black/0 via-black to-black"></span>
             </div>
-            <Logo />
-            <h1 className="mt-8 mb-4 text-base font-bold uppercase tracking-widest">
-              2022 Event Photos
-            </h1>
-            <p className="max-w-[40ch] text-white/75 sm:max-w-[32ch]">
-              Our incredible Next.js community got together in San Francisco for our first ever in-person conference!
-            </p>
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                Community Gallery
+              </span>
+              <h1 className="mt-6 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                Share Your Favorite Event Moments
+              </h1>
+              <p className="mt-4 max-w-[44ch] text-white/75 sm:max-w-[36ch]">
+                Celebrate your gatherings by adding highlights from meetups, workshops, and celebrations for everyone to relive.
+              </p>
+            </div>
 
             <div className="relative z-10">
               <input
