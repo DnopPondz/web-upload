@@ -19,6 +19,9 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; publicId: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const holdTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressTriggeredRef = useRef(false)
 
@@ -91,6 +94,34 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
       setTimeout(() => {
         longPressTriggeredRef.current = false
       }, 0)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    try {
+      const res = await fetch("/api/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public_id: deleteTarget.publicId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "ลบไม่สำเร็จ" }))
+        throw new Error(errorData.error || "ลบไม่สำเร็จ")
+      }
+
+      await router.replace(router.asPath)
+      setDeleteTarget(null)
+      setEditMode(false)
+    } catch (err: any) {
+      setDeleteError(err.message || "เกิดข้อผิดพลาดในการลบ")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -217,31 +248,68 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
               {/* Show delete button only in edit mode */}
               {editMode && (
                 <button
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation()
-                    if (!confirm("ต้องการลบรูปนี้ใช่ไหม?")) return
-                    try {
-                      const res = await fetch("/api/delete", {
-                        method: "DELETE",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ public_id }),
-                      })
-                      if (!res.ok) throw new Error("ลบไม่สำเร็จ")
-                      alert("ลบรูปสำเร็จ!")
-                      window.location.reload()
-                    } catch (err: any) {
-                      alert("เกิดข้อผิดพลาดในการลบ: " + err.message)
-                    }
+                    setDeleteError(null)
+                    setDeleteTarget({ id, publicId: public_id })
                   }}
                   className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-full opacity-90 hover:opacity-100 shadow-lg"
                 >
                   ❌
                 </button>
               )}
+          </div>
+        ))}
+      </div>
+    </main>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (!isDeleting) setDeleteTarget(null)
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-zinc-900 p-6 text-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold">ลบรูปภาพ</h2>
+            <p className="mt-2 text-sm text-white/80">
+              ต้องการลบรูปนี้ออกจากแกลเลอรีหรือไม่? การลบจะไม่สามารถย้อนกลับได้
+            </p>
+
+            {deleteError && (
+              <div className="mt-4 rounded-md bg-red-500/20 px-3 py-2 text-xs text-red-200">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-full px-4 py-2 text-sm font-semibold text-white/80 transition hover:text-white"
+                onClick={() => {
+                  if (!isDeleting) setDeleteTarget(null)
+                }}
+                disabled={isDeleting}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-500/60"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "กำลังลบ..." : "ลบรูป"}
+              </button>
             </div>
-          ))}
+          </div>
         </div>
-      </main>
+      )}
 
       <footer className="p-6 text-center text-white/80 sm:p-12">
         Thank you to{" "}
