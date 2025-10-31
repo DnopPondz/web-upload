@@ -16,14 +16,90 @@ import { useLastViewedPhoto } from "../utils/useLastViewedPhoto"
 const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const router = useRouter()
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
+
+  const sizePresets = {
+    small: { label: "เล็ก", width: 480, height: 320 },
+    medium: { label: "กลาง", width: 720, height: 480 },
+    large: { label: "ใหญ่", width: 960, height: 640 },
+  } as const
+
+  type ThumbSizeKey = keyof typeof sizePresets
+
+  type LayoutKey = "row" | "grid" | "flex" | "random"
+
+  const layoutOptions: Array<{ key: LayoutKey; label: string }> = [
+    { key: "row", label: "Row" },
+    { key: "grid", label: "Grid" },
+    { key: "flex", label: "Flex" },
+    { key: "random", label: "Random" },
+  ]
+
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; publicId: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [thumbSize, setThumbSize] = useState<ThumbSizeKey>("medium")
+  const [layoutStyle, setLayoutStyle] = useState<LayoutKey>("grid")
   const holdTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressTriggeredRef = useRef(false)
+  const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
+
+  const getSizeForImage = (id: string): ThumbSizeKey => {
+    if (layoutStyle !== "random") {
+      return thumbSize
+    }
+
+    const hash = id
+      .split("")
+      .reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return randomSizes[hash % randomSizes.length]
+  }
+
+  const containerClass = (() => {
+    switch (layoutStyle) {
+      case "row":
+        return "flex flex-col gap-4"
+      case "flex":
+        return "flex flex-wrap gap-4"
+      case "grid":
+        return "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+      case "random":
+      default:
+        return "columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4"
+    }
+  })()
+
+  const heroWrapperClass = (() => {
+    switch (layoutStyle) {
+      case "random":
+        return "mb-5 break-inside-avoid"
+      case "grid":
+        return "w-full sm:col-span-2 xl:col-span-3"
+      case "flex":
+      case "row":
+      default:
+        return "w-full"
+    }
+  })()
+
+  const baseCardClass = `relative transition-transform duration-300${
+    editMode ? " animate-wiggle" : ""
+  }`
+
+  const cardLayoutClass = (() => {
+    switch (layoutStyle) {
+      case "flex":
+        return "w-full sm:w-[calc(50%-0.5rem)] xl:w-[calc(33.333%-0.75rem)]"
+      case "random":
+        return "mb-5 break-inside-avoid"
+      case "grid":
+      case "row":
+      default:
+        return "w-full"
+    }
+  })()
 
   const { photoId } = router.query
   const currentPhoto = images.find((img) => img.id === photoId) || null
@@ -155,9 +231,61 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
           />
         )}
 
-        <div className="columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4">
+        <div className="mb-6 flex flex-col gap-4 text-white">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.25em] text-white/50">
+            <span className="tracking-[0.35em] text-white/60">ตัวกรองแกลเลอรี</span>
+            <span className="h-3 w-px bg-white/20" aria-hidden />
+            <span className="text-white/70">เลือกรูปแบบการแสดงผลและขนาดรูป</span>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
+                const isActive = thumbSize === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setThumbSize(key)}
+                    className={`rounded-full border px-3 py-1 text-sm transition ${
+                      isActive
+                        ? "border-white bg-white/10 text-white"
+                        : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
+                    }`}
+                  >
+                    {sizePresets[key].label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {layoutOptions.map(({ key, label }) => {
+                const isActive = layoutStyle === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setLayoutStyle(key)}
+                    className={`rounded-full border px-3 py-1 text-sm transition ${
+                      isActive
+                        ? "border-white bg-white/10 text-white"
+                        : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className={containerClass}>
           {/* Upload Section */}
-          <div className="after:content relative mb-5 flex h-[520px] flex-col items-center justify-end gap-4 overflow-hidden rounded-lg bg-white/10 px-6 pb-12 pt-48 text-center text-white shadow-highlight after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:shadow-highlight sm:h-[560px] lg:h-[520px] lg:pt-0">
+          <div
+            className={`after:content relative flex h-[520px] flex-col items-center justify-end gap-4 overflow-hidden rounded-lg bg-white/10 px-6 pb-12 pt-48 text-center text-white shadow-highlight after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:shadow-highlight sm:h-[560px] lg:h-[520px] lg:pt-0 ${heroWrapperClass}`}
+          >
             <div className="absolute inset-0 flex items-center justify-center opacity-20">
               <span className="flex max-h-full max-w-full items-center justify-center">
                 <Bridge />
@@ -207,60 +335,63 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
           </div>
 
           {/* Gallery */}
-          {images.map(({ id, public_id, format, blurDataUrl }) => (
-            <div
-              key={id}
-              onMouseDown={handlePressStart}
-              onMouseUp={handlePressEnd}
-              onTouchStart={handlePressStart}
-              onTouchEnd={handlePressEnd}
-              onTouchCancel={handlePressEnd}
-              className={`relative mb-5 transition-transform duration-300 ${
-                editMode ? "animate-wiggle" : ""
-              }`}
-            >
-              <Link
-                href={`/?photoId=${id}`}
-                as={`/p/${id}`}
-                shallow
-                className="block cursor-zoom-in"
-                onClick={(event) => {
-                  if (longPressTriggeredRef.current || editMode) {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    return
-                  }
+          {images.map(({ id, public_id, format, blurDataUrl }) => {
+            const sizeKey = getSizeForImage(id)
+            const { width, height } = sizePresets[sizeKey]
 
-                  setLastViewedPhoto(id)
-                }}
+            return (
+              <div
+                key={id}
+                onMouseDown={handlePressStart}
+                onMouseUp={handlePressEnd}
+                onTouchStart={handlePressStart}
+                onTouchEnd={handlePressEnd}
+                onTouchCancel={handlePressEnd}
+                className={`${baseCardClass} ${cardLayoutClass}`}
               >
-                <Image
-                  alt="Next.js Conf photo"
-                  className="transform rounded-lg brightness-90 transition will-change-auto group-hover:brightness-110"
-                  placeholder="blur"
-                  blurDataURL={blurDataUrl}
-                  src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/c_scale,w_720/${public_id}.${format}`}
-                  width={720}
-                  height={480}
-                />
-              </Link>
+                <Link
+                  href={`/?photoId=${id}`}
+                  as={`/p/${id}`}
+                  shallow
+                  className="block cursor-zoom-in"
+                  onClick={(event) => {
+                    if (longPressTriggeredRef.current || editMode) {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      return
+                    }
 
-              {/* Show delete button only in edit mode */}
-              {editMode && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteError(null)
-                    setDeleteTarget({ id, publicId: public_id })
+                    setLastViewedPhoto(id)
                   }}
-                  className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded-full opacity-90 hover:opacity-100 shadow-lg"
                 >
-                  ❌
-                </button>
-              )}
-          </div>
-        ))}
-      </div>
+                  <Image
+                    alt="Next.js Conf photo"
+                    className="transform rounded-lg brightness-90 transition will-change-auto hover:brightness-110"
+                    placeholder="blur"
+                    blurDataURL={blurDataUrl}
+                    src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/c_scale,w_${width}/${public_id}.${format}`}
+                    width={width}
+                    height={height}
+                  />
+                </Link>
+
+                {/* Show delete button only in edit mode */}
+                {editMode && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteError(null)
+                      setDeleteTarget({ id, publicId: public_id })
+                    }}
+                    className="absolute top-2 right-2 rounded-full bg-red-600 px-3 py-1 text-xs text-white opacity-90 shadow-lg transition hover:bg-red-700 hover:opacity-100"
+                  >
+                    ❌
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
     </main>
 
       {deleteTarget && (
