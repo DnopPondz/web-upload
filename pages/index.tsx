@@ -49,6 +49,64 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
 
   type LayoutKey = "row" | "grid" | "flex" | "random"
 
+  const layoutSizeClasses: Record<
+    LayoutKey,
+    {
+      container: Record<ThumbSizeKey, string>
+      card: Record<ThumbSizeKey, string>
+    }
+  > = {
+    grid: {
+      container: {
+        small:
+          "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+        medium: "grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3",
+        large: "grid grid-cols-1 gap-6 sm:grid-cols-1 xl:grid-cols-2",
+      },
+      card: {
+        small: "w-full",
+        medium: "w-full",
+        large: "w-full",
+      },
+    },
+    flex: {
+      container: {
+        small: "flex flex-wrap gap-6",
+        medium: "flex flex-wrap gap-6",
+        large: "flex flex-wrap gap-6",
+      },
+      card: {
+        small: "w-full sm:w-[calc(50%-12px)] xl:w-[calc(25%-18px)] 2xl:w-[calc(20%-19px)]",
+        medium: "w-full sm:w-[calc(50%-12px)] xl:w-[calc(33.333%-16px)]",
+        large: "w-full sm:w-[calc(66.666%-16px)] xl:w-[calc(50%-18px)]",
+      },
+    },
+    row: {
+      container: {
+        small: "flex flex-col gap-6",
+        medium: "flex flex-col gap-6",
+        large: "flex flex-col gap-6",
+      },
+      card: {
+        small: "w-full",
+        medium: "w-full",
+        large: "w-full",
+      },
+    },
+    random: {
+      container: {
+        small: "columns-1 gap-6 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5 [column-fill:_balance]",
+        medium: "columns-1 gap-6 sm:columns-2 xl:columns-3 2xl:columns-4 [column-fill:_balance]",
+        large: "columns-1 gap-6 sm:columns-1 xl:columns-2 2xl:columns-3 [column-fill:_balance]",
+      },
+      card: {
+        small: "mb-6 break-inside-avoid",
+        medium: "mb-6 break-inside-avoid",
+        large: "mb-6 break-inside-avoid",
+      },
+    },
+  }
+
   const layoutOptions: Array<{ key: LayoutKey; label: string }> = [
     { key: "grid", label: "ตาราง" },
     { key: "flex", label: "การ์ด" },
@@ -147,36 +205,13 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
     return randomSizes[hash % randomSizes.length]
   }
 
-  const containerClass = (() => {
-    switch (layoutStyle) {
-      case "row":
-        return "flex flex-col gap-6"
-      case "flex":
-        return "flex flex-wrap gap-6"
-      case "random":
-        return "columns-1 gap-6 sm:columns-2 xl:columns-3 2xl:columns-4 [column-fill:_balance]"
-      case "grid":
-      default:
-        return "grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3"
-    }
-  })()
+  const containerClass = layoutSizeClasses[layoutStyle].container[thumbSize]
 
   const baseCardClass = `group relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-[0_22px_45px_rgba(0,0,0,0.45)] transition-all duration-500 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_35px_80px_rgba(0,0,0,0.55)]${
     editMode ? " animate-wiggle" : ""
   }`
 
-  const cardLayoutClass = (() => {
-    switch (layoutStyle) {
-      case "flex":
-        return "w-full sm:w-[calc(50%-12px)] xl:w-[calc(33.333%-16px)]"
-      case "random":
-        return "mb-6 break-inside-avoid"
-      case "row":
-      case "grid":
-      default:
-        return "w-full"
-    }
-  })()
+  const cardLayoutClass = layoutSizeClasses[layoutStyle].card[thumbSize]
 
   const totalPhotos = imageData.length
   const formattedTotalPhotos = totalPhotos.toLocaleString("th-TH")
@@ -635,7 +670,10 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                         setLastViewedPhoto(id.toString())
                       }}
                     >
-                      <div className="relative overflow-hidden">
+                      <div
+                        className="relative overflow-hidden"
+                        style={{ aspectRatio: `${width}/${height}` }}
+                      >
                         <Image
                           alt="ภาพจากแกลเลอรี"
                           className="h-full w-full transform object-cover transition duration-500 will-change-transform group-hover:scale-[1.02] group-hover:brightness-110"
