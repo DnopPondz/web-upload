@@ -1,11 +1,12 @@
 "use client"
 
+import { TrashIcon } from "@heroicons/react/24/outline"
 import type { NextPage } from "next"
 import Head from "next/head"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/router"
-import { useState, useRef } from "react"
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react"
 import Bridge from "../components/Icons/Bridge"
 import Modal from "../components/Modal"
 import cloudinary from "../utils/cloudinary"
@@ -28,10 +29,10 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   type LayoutKey = "row" | "grid" | "flex" | "random"
 
   const layoutOptions: Array<{ key: LayoutKey; label: string }> = [
-    { key: "row", label: "Row" },
-    { key: "grid", label: "Grid" },
-    { key: "flex", label: "Flex" },
-    { key: "random", label: "Random" },
+    { key: "grid", label: "ตาราง" },
+    { key: "flex", label: "การ์ด" },
+    { key: "row", label: "เรียงลง" },
+    { key: "random", label: "สุ่ม" },
   ]
 
   const [isUploading, setIsUploading] = useState(false)
@@ -60,46 +61,45 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const containerClass = (() => {
     switch (layoutStyle) {
       case "row":
-        return "flex flex-col gap-4"
+        return "flex flex-col gap-6"
       case "flex":
-        return "flex flex-wrap gap-4"
-      case "grid":
-        return "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        return "flex flex-wrap gap-6"
       case "random":
+        return "columns-1 gap-6 sm:columns-2 xl:columns-3 2xl:columns-4 [column-fill:_balance]"
+      case "grid":
       default:
-        return "columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4"
+        return "grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3"
     }
   })()
 
-  const heroWrapperClass = (() => {
-    switch (layoutStyle) {
-      case "random":
-        return "mb-5 break-inside-avoid"
-      case "grid":
-        return "w-full sm:col-span-2 xl:col-span-3"
-      case "flex":
-      case "row":
-      default:
-        return "w-full"
-    }
-  })()
-
-  const baseCardClass = `relative transition-transform duration-300${
+  const baseCardClass = `group relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-[0_22px_45px_rgba(0,0,0,0.45)] transition-all duration-500 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_35px_80px_rgba(0,0,0,0.55)]${
     editMode ? " animate-wiggle" : ""
   }`
 
   const cardLayoutClass = (() => {
     switch (layoutStyle) {
       case "flex":
-        return "w-full sm:w-[calc(50%-0.5rem)] xl:w-[calc(33.333%-0.75rem)]"
+        return "w-full sm:w-[calc(50%-12px)] xl:w-[calc(33.333%-16px)]"
       case "random":
-        return "mb-5 break-inside-avoid"
-      case "grid":
+        return "mb-6 break-inside-avoid"
       case "row":
+      case "grid":
       default:
         return "w-full"
     }
   })()
+
+  const totalPhotos = images.length
+  const formattedTotalPhotos = totalPhotos.toLocaleString("th-TH")
+  const activeLayoutLabel =
+    layoutOptions.find((option) => option.key === layoutStyle)?.label || layoutStyle
+
+  const filterButtonClass = (isActive: boolean) =>
+    `rounded-full border px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
+      isActive
+        ? "border-white/70 bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.25)]"
+        : "border-white/10 text-white/70 hover:border-white/30 hover:text-white"
+    }`
 
   const { photoId } = router.query
   const currentPhoto = images.find((img) => img.id === photoId) || null
@@ -173,6 +173,13 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
     }
   }
 
+  const handleToggleEdit = () => {
+    setDeleteTarget(null)
+    setDeleteError(null)
+    setEditMode((prev) => !prev)
+    longPressTriggeredRef.current = false
+  }
+
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return
 
@@ -201,11 +208,17 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
     }
   }
 
-  const handleExitEdit = (e: any) => {
-    // Exit edit mode when clicking outside
-    if (editMode && e.target.tagName !== "BUTTON") {
-      setEditMode(false)
-    }
+  const handleExitEdit = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!editMode) return
+
+    const target = event.target
+
+    if (!(target instanceof HTMLElement)) return
+
+    if (target.closest("[data-editable-card]")) return
+    if (target.closest("[data-edit-keep]")) return
+
+    setEditMode(false)
   }
 
   return (
@@ -217,182 +230,242 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
       </Head>
 
       <main
-        className="mx-auto max-w-[1960px] p-4 select-none"
+        className="relative min-h-screen select-none overflow-hidden bg-[#040507] text-white"
         onClick={handleExitEdit}
       >
-        {photoId && (
-          <Modal
-            images={images}
-            currentPhoto={currentPhoto}
-            onClose={() => {
-              setLastViewedPhoto(photoId)
-              router.push("/", undefined, { shallow: true })
-            }}
-          />
-        )}
-
-        <div className="mb-6 flex flex-col gap-4 text-white">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.25em] text-white/50">
-            <span className="tracking-[0.35em] text-white/60">ตัวกรองแกลเลอรี</span>
-            <span className="h-3 w-px bg-white/20" aria-hidden />
-            <span className="text-white/70">เลือกรูปแบบการแสดงผลและขนาดรูป</span>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
-                const isActive = thumbSize === key
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setThumbSize(key)}
-                    className={`rounded-full border px-3 py-1 text-sm transition ${
-                      isActive
-                        ? "border-white bg-white/10 text-white"
-                        : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
-                    }`}
-                  >
-                    {sizePresets[key].label}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {layoutOptions.map(({ key, label }) => {
-                const isActive = layoutStyle === key
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setLayoutStyle(key)}
-                    className={`rounded-full border px-3 py-1 text-sm transition ${
-                      isActive
-                        ? "border-white bg-white/10 text-white"
-                        : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-1/2 top-[-35%] h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.18),transparent_65%)] blur-3xl" />
+          <div className="absolute inset-x-0 bottom-0 h-[420px] bg-gradient-to-t from-black via-black/70 to-transparent" />
         </div>
 
-        <div className={containerClass}>
-          {/* Upload Section */}
-          <div
-            className={`after:content relative flex h-[520px] flex-col items-center justify-end gap-4 overflow-hidden rounded-lg bg-white/10 px-6 pb-12 pt-48 text-center text-white shadow-highlight after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:shadow-highlight sm:h-[560px] lg:h-[520px] lg:pt-0 ${heroWrapperClass}`}
-          >
-            <div className="absolute inset-0 flex items-center justify-center opacity-20">
-              <span className="flex max-h-full max-w-full items-center justify-center">
-                <Bridge />
-              </span>
-              <span className="absolute left-0 right-0 bottom-0 h-[400px] bg-gradient-to-b from-black/0 via-black to-black"></span>
+        <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 pb-20 pt-12 sm:px-6 lg:px-8">
+          {photoId && (
+            <Modal
+              images={images}
+              currentPhoto={currentPhoto}
+              onClose={() => {
+                setLastViewedPhoto(photoId)
+                router.push("/", undefined, { shallow: true })
+              }}
+            />
+          )}
+
+          <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:p-10">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center">
+              <div className="flex flex-col gap-6 text-left">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">
+                    Community Gallery
+                  </span>
+                  <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+                    Share Your Favorite Event Moments
+                  </h1>
+                  <p className="mt-3 max-w-xl text-sm text-white/70 sm:text-base">
+                    Celebrate your gatherings by adding highlights from meetups, workshops, and celebrations for everyone to
+                    relive.
+                  </p>
+                </div>
+
+                <dl className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 shadow-inner shadow-black/25">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">จำนวนรูป</dt>
+                    <dd className="mt-2 text-2xl font-semibold text-white">{formattedTotalPhotos}</dd>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 shadow-inner shadow-black/25">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">ขนาดแสดงผล</dt>
+                    <dd className="mt-2 text-lg font-medium text-white">{sizePresets[thumbSize].label}</dd>
+                  </div>
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 shadow-inner shadow-black/25">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">เลย์เอาต์</dt>
+                    <dd className="mt-2 text-lg font-medium text-white">{activeLayoutLabel}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/15 via-white/5 to-white/[0.02] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
+                <div className="pointer-events-none absolute -left-10 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.18),transparent_60%)] blur-3xl" />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-10">
+                  <Bridge />
+                </div>
+                <div className="relative z-10 flex flex-col gap-5 text-left">
+                  <span className="inline-flex w-fit items-center rounded-full border border-white/25 bg-black/40 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 backdrop-blur">
+                    Upload Photo
+                  </span>
+                  <p className="text-sm text-white/75">
+                    เลือกไฟล์ภาพเพื่อเพิ่มลงในแกลเลอรีทันที ระบบจะปรับขนาดให้เหมาะกับการแสดงผลโดยอัตโนมัติ
+                  </p>
+                  <div>
+                    <input
+                      type="file"
+                      id="file-upload"
+                      accept="image/*"
+                      onChange={handleUpload}
+                      disabled={isUploading}
+                      className="sr-only"
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/60 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
+                        isUploading ? "cursor-not-allowed opacity-60" : ""
+                      }`}
+                    >
+                      {isUploading ? "กำลังอัปโหลด..." : "เลือกไฟล์เพื่ออัปโหลด"}
+                    </label>
+                    <p className="mt-2 text-xs text-white/55">รองรับไฟล์ JPG, PNG และ WEBP</p>
+                  </div>
+
+                  {uploadError && (
+                    <div className="rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-sm text-red-100 backdrop-blur">
+                      <strong className="font-semibold">อัปโหลดไม่สำเร็จ:</strong> {uploadError}
+                      <br />
+                      <span className="text-xs text-red-200">
+                        โปรดตรวจสอบค่า Upload Preset ใน Cloudinary และไฟล์ .env.local
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="relative z-10 flex flex-col items-center text-center">
-              <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
-                Community Gallery
-              </span>
-              <h1 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                Share Your Favorite Event Moments
-              </h1>
-              <p className="mt-3 max-w-[44ch] text-white/75 sm:max-w-[36ch]">
-                Celebrate your gatherings by adding highlights from meetups, workshops, and celebrations for everyone to relive.
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.5)] backdrop-blur-sm sm:p-8">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-base font-semibold text-white">ปรับมุมมองแกลเลอรี</p>
+                  <p className="mt-1 text-sm text-white/60">เลือกขนาดและการจัดเรียงที่เหมาะกับคุณ</p>
+                </div>
+                <button
+                  type="button"
+                  data-edit-keep
+                  onClick={handleToggleEdit}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
+                    editMode
+                      ? "border-emerald-300/70 bg-emerald-500/10 text-emerald-100"
+                      : "border-white/15 text-white/75 hover:border-white/35 hover:text-white"
+                  }`}
+                >
+                  <TrashIcon className="h-4 w-4" />
+                  {editMode ? "ออกจากโหมดจัดการ" : "โหมดจัดการรูป"}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap items-center gap-2" data-edit-keep>
+                  {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
+                    const isActive = thumbSize === key
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setThumbSize(key)}
+                        aria-pressed={isActive}
+                        className={filterButtonClass(isActive)}
+                        data-edit-keep
+                      >
+                        {sizePresets[key].label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2" data-edit-keep>
+                  {layoutOptions.map(({ key, label }) => {
+                    const isActive = layoutStyle === key
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setLayoutStyle(key)}
+                        aria-pressed={isActive}
+                        className={filterButtonClass(isActive)}
+                        data-edit-keep
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <p className="text-xs text-white/55">
+                เคล็ดลับ: กดค้างที่รูปเพื่อเปิดโหมดจัดการ หรือใช้ปุ่ม "โหมดจัดการรูป" เพื่อเลือกลบภาพที่ไม่ต้องการ
               </p>
             </div>
+          </section>
 
-            <div className="relative z-10">
-              <input
-                type="file"
-                id="file-upload"
-                accept="image/*"
-                onChange={handleUpload}
-                disabled={isUploading}
-                className="sr-only"
-              />
-              <label
-                htmlFor="file-upload"
-                className={`cursor-pointer rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black/80 ${
-                  isUploading ? "cursor-not-allowed opacity-50" : ""
-                }`}
-              >
-                {isUploading ? "กำลังอัปโหลด..." : "อัปโหลดรูปภาพ"}
-              </label>
-            </div>
+          <section>
+            <div className={containerClass}>
+              {images.map(({ id, public_id, format, blurDataUrl }) => {
+                const sizeKey = getSizeForImage(id)
+                const { width, height } = sizePresets[sizeKey]
 
-            {uploadError && (
-              <div className="mt-4 rounded-md bg-red-800/50 p-3 text-sm text-red-100">
-                <strong>Upload Failed:</strong> {uploadError}
-                <br />
-                <span className="text-xs text-red-200">
-                  (โปรดเช็ก 'Upload Preset' ใน Cloudinary และ .env.local)
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Gallery */}
-          {images.map(({ id, public_id, format, blurDataUrl }) => {
-            const sizeKey = getSizeForImage(id)
-            const { width, height } = sizePresets[sizeKey]
-
-            return (
-              <div
-                key={id}
-                onMouseDown={handlePressStart}
-                onMouseUp={handlePressEnd}
-                onTouchStart={handlePressStart}
-                onTouchEnd={handlePressEnd}
-                onTouchCancel={handlePressEnd}
-                className={`${baseCardClass} ${cardLayoutClass}`}
-              >
-                <Link
-                  href={`/?photoId=${id}`}
-                  as={`/p/${id}`}
-                  shallow
-                  className="block cursor-zoom-in"
-                  onClick={(event) => {
-                    if (longPressTriggeredRef.current || editMode) {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      return
-                    }
-
-                    setLastViewedPhoto(id)
-                  }}
-                >
-                  <Image
-                    alt="Next.js Conf photo"
-                    className="transform rounded-lg brightness-90 transition will-change-auto hover:brightness-110"
-                    placeholder="blur"
-                    blurDataURL={blurDataUrl}
-                    src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/c_scale,w_${width}/${public_id}.${format}`}
-                    width={width}
-                    height={height}
-                  />
-                </Link>
-
-                {/* Show delete button only in edit mode */}
-                {editMode && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleteError(null)
-                      setDeleteTarget({ id, publicId: public_id })
-                    }}
-                    className="absolute top-2 right-2 rounded-full bg-red-600 px-3 py-1 text-xs text-white opacity-90 shadow-lg transition hover:bg-red-700 hover:opacity-100"
+                return (
+                  <div
+                    key={id}
+                    data-editable-card
+                    onMouseDown={handlePressStart}
+                    onMouseUp={handlePressEnd}
+                    onTouchStart={handlePressStart}
+                    onTouchEnd={handlePressEnd}
+                    onTouchCancel={handlePressEnd}
+                    className={`${baseCardClass} ${cardLayoutClass}`}
                   >
-                    ❌
-                  </button>
-                )}
-              </div>
-            )
-          })}
+                    <Link
+                      href={`/?photoId=${id}`}
+                      as={`/p/${id}`}
+                      shallow
+                      className="block cursor-zoom-in"
+                      onClick={(event) => {
+                        if (longPressTriggeredRef.current || editMode) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          return
+                        }
+
+                        setLastViewedPhoto(id)
+                      }}
+                    >
+                      <div className="relative overflow-hidden">
+                        <Image
+                          alt="ภาพจากแกลเลอรี"
+                          className="h-full w-full transform object-cover transition duration-500 will-change-transform group-hover:scale-[1.02] group-hover:brightness-110"
+                          placeholder="blur"
+                          blurDataURL={blurDataUrl}
+                          src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/c_scale,w_${width}/${public_id}.${format}`}
+                          width={width}
+                          height={height}
+                        />
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-4 pb-4 pt-8 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+                          <span className="text-sm font-medium text-white">ชมภาพแบบเต็ม</span>
+                          <span className="text-xs text-white/70">คลิกเพื่อเปิดหน้าต่างแกลเลอรี</span>
+                        </div>
+                      </div>
+                    </Link>
+
+                    {editMode && (
+                      <button
+                        type="button"
+                        data-editable-card
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setDeleteError(null)
+                          setDeleteTarget({ id, publicId: public_id })
+                        }}
+                        className="pointer-events-auto absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-red-400/50 bg-red-500/15 px-3 py-1 text-xs font-medium text-red-100 backdrop-blur transition hover:border-red-300 hover:bg-red-500/25"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        ลบ
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
         </div>
-    </main>
+      </main>
 
       {deleteTarget && (
         <div
@@ -404,16 +477,16 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
           }}
         >
           <div
-            className="w-full max-w-sm rounded-xl bg-zinc-900 p-6 text-white shadow-2xl"
+            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold">ลบรูปภาพ</h2>
-            <p className="mt-2 text-sm text-white/80">
+            <h2 className="text-xl font-semibold">ลบรูปภาพ</h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
               ต้องการลบรูปนี้ออกจากแกลเลอรีหรือไม่? การลบจะไม่สามารถย้อนกลับได้
             </p>
 
             {deleteError && (
-              <div className="mt-4 rounded-md bg-red-500/20 px-3 py-2 text-xs text-red-200">
+              <div className="mt-4 rounded-xl border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs text-red-100">
                 {deleteError}
               </div>
             )}
@@ -421,7 +494,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 type="button"
-                className="rounded-full px-4 py-2 text-sm font-semibold text-white/80 transition hover:text-white"
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
                   if (!isDeleting) setDeleteTarget(null)
                 }}
@@ -431,7 +504,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
               </button>
               <button
                 type="button"
-                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-500/60"
+                className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(239,68,68,0.35)] transition hover:bg-red-400 disabled:cursor-not-allowed disabled:bg-red-500/60"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
               >
@@ -442,12 +515,12 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         </div>
       )}
 
-      <footer className="p-6 text-center text-white/80 sm:p-12">
+      <footer className="border-t border-white/10 bg-black/50 px-6 py-10 text-center text-xs text-white/55 backdrop-blur sm:px-8">
         Thank you to{" "}
         <a
           href="https://edelson.co/"
           target="_blank"
-          className="font-semibold hover:text-white"
+          className="font-semibold text-white/80 transition hover:text-white"
           rel="noreferrer"
         >
           Josh Edelson
@@ -456,7 +529,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         <a
           href="https://www.newrevmedia.com/"
           target="_blank"
-          className="font-semibold hover:text-white"
+          className="font-semibold text-white/80 transition hover:text-white"
           rel="noreferrer"
         >
           New Revolution Media
@@ -465,7 +538,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         <a
           href="https://www.garysexton.com/"
           target="_blank"
-          className="font-semibold hover:text-white"
+          className="font-semibold text-white/80 transition hover:text-white"
           rel="noreferrer"
         >
           Gary Sexton
