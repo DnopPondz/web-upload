@@ -20,6 +20,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const holdTimer = useRef<NodeJS.Timeout | null>(null)
+  const longPressTriggeredRef = useRef(false)
 
   const { photoId } = router.query
   const currentPhoto = images.find((img) => img.id === photoId) || null
@@ -70,14 +71,27 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   }
 
   // --- Long press handlers for edit mode ---
-  const handleMouseDown = () => {
+  const handlePressStart = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current)
+
     holdTimer.current = setTimeout(() => {
+      longPressTriggeredRef.current = true
       setEditMode(true)
     }, 600) // hold 0.6s
   }
 
-  const handleMouseUp = () => {
-    if (holdTimer.current) clearTimeout(holdTimer.current)
+  const handlePressEnd = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+
+    if (longPressTriggeredRef.current) {
+      // Allow the trailing click/tap event to read the flag before resetting it
+      setTimeout(() => {
+        longPressTriggeredRef.current = false
+      }, 0)
+    }
   }
 
   const handleExitEdit = (e: any) => {
@@ -165,10 +179,11 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
           {images.map(({ id, public_id, format, blurDataUrl }) => (
             <div
               key={id}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onTouchStart={handleMouseDown}
-              onTouchEnd={handleMouseUp}
+              onMouseDown={handlePressStart}
+              onMouseUp={handlePressEnd}
+              onTouchStart={handlePressStart}
+              onTouchEnd={handlePressEnd}
+              onTouchCancel={handlePressEnd}
               className={`relative mb-5 transition-transform duration-300 ${
                 editMode ? "animate-wiggle" : ""
               }`}
@@ -178,7 +193,15 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                 as={`/p/${id}`}
                 shallow
                 className="block cursor-zoom-in"
-                onClick={() => setLastViewedPhoto(id)}
+                onClick={(event) => {
+                  if (longPressTriggeredRef.current || editMode) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    return
+                  }
+
+                  setLastViewedPhoto(id)
+                }}
               >
                 <Image
                   alt="Next.js Conf photo"
