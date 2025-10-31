@@ -10,6 +10,14 @@ export interface ImageProps {
   description?: string;
 }
 
+export interface GalleryUser {
+  id: string;
+  displayName: string;
+  folder: string;
+  avatarPublicId?: string;
+  pinHint?: string;
+}
+
 export interface SharedModalProps {
   index: number;
   images?: ImageProps[];
