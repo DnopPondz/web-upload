@@ -1,7 +1,7 @@
 import { Dialog } from "@headlessui/react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useKeypress from "react-use-keypress";
 import type { ImageProps } from "../utils/types";
 import SharedModal from "./SharedModal";
@@ -17,41 +17,72 @@ export default function Modal({
   const router = useRouter();
 
   const { photoId } = router.query;
-  let index = Number(photoId);
+  const photoIdParam = Array.isArray(photoId) ? photoId[0] : photoId;
+  const parsedIndex = Number(photoIdParam);
+  const initialIndex = Number.isFinite(parsedIndex) ? parsedIndex : 0;
 
   const [direction, setDirection] = useState(0);
-  const [curIndex, setCurIndex] = useState(index);
+  const [curIndex, setCurIndex] = useState(initialIndex);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (Number.isFinite(parsedIndex) && parsedIndex !== curIndex) {
+      setCurIndex(parsedIndex);
+    }
+  }, [parsedIndex, curIndex]);
+
+  useEffect(() => {
+    const handleRouteComplete = () => setIsTransitioning(false);
+
+    router.events.on("routeChangeComplete", handleRouteComplete);
+    router.events.on("routeChangeError", handleRouteComplete);
+
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteComplete);
+      router.events.off("routeChangeError", handleRouteComplete);
+    };
+  }, [router]);
 
   function handleClose() {
-    router.push("/", undefined, { shallow: true });
-    onClose();
+    setIsTransitioning(false);
+    router.push("/", undefined, { shallow: true, scroll: false });
+    onClose?.();
   }
 
   function changePhotoId(newVal: number) {
-    if (newVal > index) {
-      setDirection(1);
-    } else {
-      setDirection(-1);
+    if (isTransitioning) {
+      return;
     }
-    setCurIndex(newVal);
-    router.push(
-      {
-        query: { photoId: newVal },
-      },
-      `/p/${newVal}`,
-      { shallow: true },
-    );
+
+    const clampedValue = Math.max(0, Math.min(newVal, images.length - 1));
+    if (clampedValue === curIndex) {
+      return;
+    }
+
+    setDirection(clampedValue > curIndex ? 1 : -1);
+    setCurIndex(clampedValue);
+    setIsTransitioning(true);
+    router
+      .push(
+        {
+          pathname: "/",
+          query: { photoId: clampedValue },
+        },
+        `/p/${clampedValue}`,
+        { shallow: true, scroll: false },
+      )
+      .catch(() => setIsTransitioning(false));
   }
 
   useKeypress("ArrowRight", () => {
-    if (index + 1 < images.length) {
-      changePhotoId(index + 1);
+    if (curIndex + 1 < images.length) {
+      changePhotoId(curIndex + 1);
     }
   });
 
   useKeypress("ArrowLeft", () => {
-    if (index > 0) {
-      changePhotoId(index - 1);
+    if (curIndex > 0) {
+      changePhotoId(curIndex - 1);
     }
   });
 
