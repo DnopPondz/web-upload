@@ -112,7 +112,7 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
 
         <div className="columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4">
           {/* Upload Section */}
-          <div className="after:content relative mb-5 flex h-[629px] flex-col items-center justify-end gap-4 overflow-hidden rounded-lg bg-white/10 px-6 pb-16 pt-64 text-center text-white shadow-highlight after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:shadow-highlight lg:pt-0">
+          <div className="after:content relative mb-5 flex h-[520px] flex-col items-center justify-end gap-4 overflow-hidden rounded-lg bg-white/10 px-6 pb-12 pt-48 text-center text-white shadow-highlight after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:shadow-highlight sm:h-[560px] lg:h-[520px] lg:pt-0">
             <div className="absolute inset-0 flex items-center justify-center opacity-20">
               <span className="flex max-h-full max-w-full items-center justify-center">
                 <Bridge />
@@ -123,10 +123,10 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
               <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
                 Community Gallery
               </span>
-              <h1 className="mt-6 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <h1 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl">
                 Share Your Favorite Event Moments
               </h1>
-              <p className="mt-4 max-w-[44ch] text-white/75 sm:max-w-[36ch]">
+              <p className="mt-3 max-w-[44ch] text-white/75 sm:max-w-[36ch]">
                 Celebrate your gatherings by adding highlights from meetups, workshops, and celebrations for everyone to relive.
               </p>
             </div>
