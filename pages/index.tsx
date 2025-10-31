@@ -1,7 +1,7 @@
 "use client"
 
 import { TrashIcon } from "@heroicons/react/24/outline"
-import type { NextPage } from "next"
+import type { GetServerSidePropsContext, NextPage } from "next"
 import Head from "next/head"
 import Image from "next/image"
 import Link from "next/link"
@@ -18,10 +18,17 @@ import Bridge from "../components/Icons/Bridge"
 import Modal from "../components/Modal"
 import cloudinary from "../utils/cloudinary"
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder"
-import type { ImageProps } from "../utils/types"
+import { clearSessionCookie, getAuthenticatedUser, mapUserDocs, SESSION_COOKIE_NAME } from "../utils/session"
+import type { GalleryUser, ImageProps } from "../utils/types"
 import { useLastViewedPhoto } from "../utils/useLastViewedPhoto"
 
-const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
+type HomeProps = {
+  images: ImageProps[]
+  users: GalleryUser[]
+  activeUser: GalleryUser | null
+}
+
+const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const router = useRouter()
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
 
@@ -38,6 +45,34 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   useEffect(() => {
     setImageData(images)
   }, [images])
+
+  useEffect(() => {
+    setIsUserSelectorOpen(!activeUser)
+    if (!activeUser) {
+      setSelectedUserId(null)
+      setPinInput("")
+      setPinError(null)
+    }
+  }, [activeUser])
+
+  useEffect(() => {
+    setAlbumFilter("__all__")
+    setEditMode(false)
+    setDeleteTarget(null)
+  }, [activeUser])
+
+  useEffect(() => {
+    if (!isUserSelectorOpen) {
+      setPinInput("")
+      setPinError(null)
+    }
+  }, [isUserSelectorOpen])
+
+  useEffect(() => {
+    if (isUserSelectorOpen && users.length === 1 && !selectedUserId) {
+      setSelectedUserId(users[0].id)
+    }
+  }, [isUserSelectorOpen, users, selectedUserId])
 
   const sizePresets = {
     small: { label: "เล็ก", width: 480, height: 320 },
@@ -125,6 +160,96 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const holdTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressTriggeredRef = useRef(false)
   const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
+
+  const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(!activeUser)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [pinInput, setPinInput] = useState("")
+  const [pinError, setPinError] = useState<string | null>(null)
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  const buildAvatarUrl = (user: GalleryUser, size: number) => {
+    if (!cloudName || !user.avatarPublicId) return null
+    return `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,g_auto,w=${size},h=${size}/${user.avatarPublicId}`
+  }
+
+  const selectedUser = useMemo(
+    () => users.find((user) => user.id === selectedUserId) ?? null,
+    [users, selectedUserId],
+  )
+  const canDismissUserSelector = Boolean(activeUser)
+  const activeUserAvatarUrl = activeUser ? buildAvatarUrl(activeUser, 160) : null
+  const activeUserInitials = useMemo(() => {
+    if (!activeUser?.displayName) return "?"
+    return (
+      activeUser.displayName
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part[0]?.toUpperCase())
+        .join("")
+        .slice(0, 2) || "?"
+    )
+  }, [activeUser])
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUserId(userId)
+    setPinInput("")
+    setPinError(null)
+  }
+
+  const handleSubmitPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedUserId) {
+      setPinError("กรุณาเลือกผู้ใช้")
+      return
+    }
+
+    setIsVerifyingPin(true)
+    setPinError(null)
+
+    try {
+      const response = await fetch("/api/users/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: selectedUserId, pin: pinInput }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "" }))
+        throw new Error(errorData.error || "ไม่สามารถยืนยันตัวตนได้")
+      }
+
+      setIsUserSelectorOpen(false)
+      setSelectedUserId(null)
+      setPinInput("")
+
+      await router.replace(router.asPath, undefined, { scroll: false })
+    } catch (error: any) {
+      setPinError(error?.message || "เกิดข้อผิดพลาดในการยืนยันตัวตน")
+    } finally {
+      setIsVerifyingPin(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await fetch("/api/users/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      })
+
+      setIsUserSelectorOpen(true)
+      await router.replace(router.asPath, undefined, { scroll: false })
+    } catch (error) {
+      console.error("Failed to logout", error)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
 
   const fallbackAlbumKey = "__ungrouped__"
   const fallbackAlbumLabel = "ไม่ระบุกลุ่ม"
@@ -232,6 +357,12 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    if (!activeUser) {
+      setUploadError("กรุณาเลือกผู้ใช้ก่อนอัปโหลดรูปภาพ")
+      event.target.value = ""
+      return
+    }
 
     setIsUploading(true)
     setUploadError(null)
@@ -423,6 +554,144 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         className="relative min-h-screen select-none overflow-hidden bg-[#040507] text-white"
         onClick={handleExitEdit}
       >
+        {isUserSelectorOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#0f1117]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.6)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold">เลือกผู้ใช้</h2>
+                  <p className="mt-1 text-sm text-white/70">
+                    เลือกบัญชีและกรอกรหัส PIN เพื่อดูรูปภาพในโฟลเดอร์ของคุณ
+                  </p>
+                </div>
+                {canDismissUserSelector && (
+                  <button
+                    type="button"
+                    onClick={() => setIsUserSelectorOpen(false)}
+                    className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
+                  >
+                    ปิด
+                  </button>
+                )}
+              </div>
+
+              {users.length > 0 ? (
+                <>
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                    {users.map((user) => {
+                      const isActiveCard = selectedUserId === user.id
+                      const avatarUrl = buildAvatarUrl(user, 200)
+                      const initials = user.displayName
+                        .split(" ")
+                        .filter(Boolean)
+                        .map((part) => part[0]?.toUpperCase())
+                        .join("")
+                        .slice(0, 2) || "?"
+
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => handleSelectUser(user.id)}
+                          className={`group relative flex flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-center transition ${
+                            isActiveCard
+                              ? "border-cyan-400/80 bg-cyan-400/10 text-white shadow-[0_12px_40px_rgba(34,211,238,0.35)]"
+                              : "border-white/10 bg-white/[0.02] text-white/80 hover:border-white/30 hover:text-white"
+                          }`}
+                          aria-pressed={isActiveCard}
+                        >
+                          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/40 shadow-inner shadow-black/50">
+                            {avatarUrl ? (
+                              <Image
+                                src={avatarUrl}
+                                alt={user.displayName}
+                                width={96}
+                                height={96}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-2xl font-semibold text-white/80">{initials}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-base font-semibold text-white">{user.displayName}</span>
+                            <span className="text-xs uppercase tracking-[0.28em] text-white/50">{user.folder}</span>
+                            {user.pinHint && (
+                              <span className="text-[11px] text-white/40">{user.pinHint}</span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmitPin}>
+                    <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
+                        ผู้ใช้ที่เลือก
+                      </p>
+                      <p className="mt-2 text-sm text-white/80">
+                        {selectedUser ? selectedUser.displayName : "ยังไม่ได้เลือกผู้ใช้"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label
+                        htmlFor="pin-input"
+                        className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45"
+                      >
+                        รหัส PIN
+                      </label>
+                      <input
+                        id="pin-input"
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                        value={pinInput}
+                        onChange={(event) => setPinInput(event.target.value)}
+                        disabled={!selectedUser || isVerifyingPin}
+                        placeholder="กรอกรหัส 4 หลัก"
+                        className="w-full rounded-xl border border-white/20 bg-black/50 px-4 py-2 text-center text-lg tracking-[0.35em] text-white shadow-inner shadow-black/30 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      {pinError && (
+                        <p className="text-xs text-red-300">{pinError}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3">
+                      {canDismissUserSelector && (
+                        <button
+                          type="button"
+                          onClick={() => setIsUserSelectorOpen(false)}
+                          className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/35 hover:text-white"
+                        >
+                          ยกเลิก
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={!selectedUser || pinInput.trim() === "" || isVerifyingPin}
+                        className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
+                      >
+                        {isVerifyingPin ? "กำลังตรวจสอบ..." : "เข้าสู่ระบบ"}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <div className="mt-6 rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-white/70">
+                  ยังไม่มีผู้ใช้ในระบบ โปรดเพิ่มข้อมูลผู้ใช้ใน MongoDB ก่อน
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-1/2 top-[-35%] h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.18),transparent_65%)] blur-3xl" />
           <div className="absolute inset-x-0 bottom-0 h-[420px] bg-gradient-to-t from-black via-black/70 to-transparent" />
@@ -456,6 +725,64 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
           <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:p-10">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center">
               <div className="flex flex-col gap-6 text-left">
+                <div className="rounded-2xl border border-white/10 bg-black/40 p-4 shadow-inner shadow-black/20">
+                  {activeUser ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40">
+                          {activeUserAvatarUrl ? (
+                            <Image
+                              src={activeUserAvatarUrl}
+                              alt={activeUser.displayName}
+                              width={56}
+                              height={56}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-lg font-semibold text-white/80">{activeUserInitials}</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
+                            กำลังดูแกลเลอรีของ
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-white">{activeUser.displayName}</p>
+                          <p className="text-xs text-white/60">โฟลเดอร์: {activeUser.folder}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setIsUserSelectorOpen(true)}
+                          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
+                        >
+                          สลับผู้ใช้
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          disabled={isLoggingOut}
+                          className="rounded-full border border-red-400/60 px-4 py-2 text-xs font-semibold text-red-100 transition hover:border-red-300 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
+                        >
+                          {isLoggingOut ? "กำลังออกจากระบบ..." : "ออกจากระบบ"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm text-white/75">
+                        เลือกผู้ใช้เพื่อเข้าสู่แกลเลอรีส่วนตัวของคุณและดูรูปภาพในโฟลเดอร์เฉพาะ
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsUserSelectorOpen(true)}
+                        className="self-start rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
+                      >
+                        เลือกผู้ใช้
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">
                     Community Gallery
@@ -503,16 +830,21 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                       id="file-upload"
                       accept="image/*"
                       onChange={handleUpload}
-                      disabled={isUploading}
+                      disabled={isUploading || !activeUser}
                       className="sr-only"
                     />
                     <label
                       htmlFor="file-upload"
                       className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/60 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
-                        isUploading ? "cursor-not-allowed opacity-60" : ""
+                        isUploading || !activeUser ? "cursor-not-allowed opacity-60" : ""
                       }`}
+                      aria-disabled={isUploading || !activeUser}
                     >
-                      {isUploading ? "กำลังอัปโหลด..." : "เลือกไฟล์เพื่ออัปโหลด"}
+                      {isUploading
+                        ? "กำลังอัปโหลด..."
+                        : activeUser
+                          ? "เลือกไฟล์เพื่ออัปโหลด"
+                          : "เลือกผู้ใช้ก่อนอัปโหลด"}
                     </label>
                     <p className="mt-2 text-xs text-white/55">รองรับไฟล์ JPG, PNG และ WEBP</p>
                   </div>
@@ -893,70 +1225,122 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
 
 export default Home
 
-export async function getServerSideProps() {
-  const results = await cloudinary.search
-    .expression("tags=nextjs-conf")
-    .with_field("context")
-    .sort_by("public_id", "desc")
-    .max_results(400)
-    .execute()
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { req, res } = context
 
-  const publicIds = results.resources.map((result: any) => result.public_id)
+  let users: GalleryUser[] = []
+  let activeUser: GalleryUser | null = null
+  let images: ImageProps[] = []
 
-  const metadataMap = new Map<string, { album?: string; description?: string }>()
+  try {
+    const { default: clientPromise } = await import("../utils/mongodb")
+    const client = await clientPromise
+    const db = client.db(process.env.MONGODB_DB || "img-detail")
+    const userCollection = db.collection("galleryUsers")
 
-  if (process.env.MONGODB_URI && publicIds.length > 0) {
-    try {
-      const { default: clientPromise } = await import("../utils/mongodb")
-      const client = await clientPromise
-      const db = client.db(process.env.MONGODB_DB || "img-detail")
-      const collection = db.collection<{
-        public_id: string
-        album?: string
-        description?: string
-      }>("photoMetadata")
+    const userDocs = await userCollection
+      .find(
+        {},
+        {
+          projection: {
+            displayName: 1,
+            folder: 1,
+            avatarPublicId: 1,
+            pinHint: 1,
+          },
+        },
+      )
+      .sort({ displayName: 1 })
+      .toArray()
 
-      const documents = await collection
-        .find({ public_id: { $in: publicIds } })
-        .toArray()
+    users = mapUserDocs(userDocs)
+  } catch (error) {
+    console.error("Failed to load user list", error)
+  }
 
-      documents.forEach((doc) => {
-        metadataMap.set(doc.public_id, {
-          album: doc.album ?? "",
-          description: doc.description ?? "",
-        })
-      })
-    } catch (error) {
-      console.error("Failed to load MongoDB metadata:", error)
+  try {
+    activeUser = await getAuthenticatedUser(req as any)
+    if (!activeUser && req.cookies?.[SESSION_COOKIE_NAME]) {
+      res.setHeader("Set-Cookie", clearSessionCookie())
     }
+  } catch (error) {
+    console.error("Failed to resolve active user", error)
   }
 
-  let reducedResults: ImageProps[] = []
-  let i = 0
-  for (let result of results.resources) {
-    const metadata = metadataMap.get(result.public_id)
-    reducedResults.push({
-      id: i,
-      height: result.height,
-      width: result.width,
-      public_id: result.public_id,
-      format: result.format,
-      album: metadata?.album ?? result?.context?.custom?.album ?? "",
-      description: metadata?.description ?? result?.context?.custom?.description ?? "",
-    })
-    i++
-  }
+  if (activeUser) {
+    try {
+      const sanitizedFolder = activeUser.folder.replace(/"/g, '\\"')
+      const results = await cloudinary.search
+        .expression(`folder="${sanitizedFolder}" AND resource_type:image`)
+        .with_field("context")
+        .sort_by("public_id", "desc")
+        .max_results(400)
+        .execute()
 
-  const blurImagePromises = results.resources.map((image: ImageProps) => getBase64ImageUrl(image))
-  const imagesWithBlurDataUrls = await Promise.all(blurImagePromises)
+      const publicIds = results.resources.map((result: any) => result.public_id)
 
-  for (let i = 0; i < reducedResults.length; i++) {
-    reducedResults[i].blurDataUrl = imagesWithBlurDataUrls[i]
+      const metadataMap = new Map<string, { album?: string; description?: string }>()
+
+      if (process.env.MONGODB_URI && publicIds.length > 0) {
+        try {
+          const { default: clientPromise } = await import("../utils/mongodb")
+          const client = await clientPromise
+          const db = client.db(process.env.MONGODB_DB || "img-detail")
+          const collection = db.collection<{
+            public_id: string
+            album?: string
+            description?: string
+            ownerId?: string
+          }>("photoMetadata")
+
+          const documents = await collection
+            .find({
+              public_id: { $in: publicIds },
+              $or: [{ ownerId: activeUser.id }, { ownerId: { $exists: false } }],
+            })
+            .toArray()
+
+          documents.forEach((doc) => {
+            metadataMap.set(doc.public_id, {
+              album: doc.album ?? "",
+              description: doc.description ?? "",
+            })
+          })
+        } catch (error) {
+          console.error("Failed to load MongoDB metadata:", error)
+        }
+      }
+
+      const reducedResults: ImageProps[] = results.resources.map((result: any, index: number) => {
+        const metadata = metadataMap.get(result.public_id)
+        return {
+          id: index,
+          height: result.height,
+          width: result.width,
+          public_id: result.public_id,
+          format: result.format,
+          album: metadata?.album ?? result?.context?.custom?.album ?? "",
+          description: metadata?.description ?? result?.context?.custom?.description ?? "",
+        }
+      })
+
+      const blurImagePromises = reducedResults.map((image) => getBase64ImageUrl(image))
+      const imagesWithBlurDataUrls = await Promise.all(blurImagePromises)
+
+      images = reducedResults.map((image, index) => ({
+        ...image,
+        blurDataUrl: imagesWithBlurDataUrls[index],
+      }))
+    } catch (error) {
+      console.error("Failed to load images for user", error)
+    }
   }
 
   return {
     props: {
-      images: reducedResults,
+      images,
+      users,
+      activeUser,
     },
   }
 }
