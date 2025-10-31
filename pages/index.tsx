@@ -901,17 +901,48 @@ export async function getServerSideProps() {
     .max_results(400)
     .execute()
 
+  const publicIds = results.resources.map((result: any) => result.public_id)
+
+  const metadataMap = new Map<string, { album?: string; description?: string }>()
+
+  if (process.env.MONGODB_URI && publicIds.length > 0) {
+    try {
+      const { default: clientPromise } = await import("../utils/mongodb")
+      const client = await clientPromise
+      const db = client.db(process.env.MONGODB_DB || "img-detail")
+      const collection = db.collection<{
+        public_id: string
+        album?: string
+        description?: string
+      }>("photoMetadata")
+
+      const documents = await collection
+        .find({ public_id: { $in: publicIds } })
+        .toArray()
+
+      documents.forEach((doc) => {
+        metadataMap.set(doc.public_id, {
+          album: doc.album ?? "",
+          description: doc.description ?? "",
+        })
+      })
+    } catch (error) {
+      console.error("Failed to load MongoDB metadata:", error)
+    }
+  }
+
   let reducedResults: ImageProps[] = []
   let i = 0
   for (let result of results.resources) {
+    const metadata = metadataMap.get(result.public_id)
     reducedResults.push({
       id: i,
       height: result.height,
       width: result.width,
       public_id: result.public_id,
       format: result.format,
-      album: result?.context?.custom?.album ?? "",
-      description: result?.context?.custom?.description ?? "",
+      album: metadata?.album ?? result?.context?.custom?.album ?? "",
+      description: metadata?.description ?? result?.context?.custom?.description ?? "",
     })
     i++
   }
