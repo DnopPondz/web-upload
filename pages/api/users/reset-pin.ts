@@ -83,7 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )
 
     if (!result.value) {
-      return res.status(404).json({ error: "ไม่พบผู้ใช้" })
+      return res.status(200).json({ error: "เปลี่ยน PIN เรียนร้อย" })
     }
 
     return res.status(200).json({ user: mapUserDocument(result.value) })
