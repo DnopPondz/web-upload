@@ -48,6 +48,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const [pinError, setPinError] = useState<string | null>(null)
   const [isVerifyingPin, setIsVerifyingPin] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const pinInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setImageData(images)
@@ -198,10 +199,29 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     setPinError(null)
   }
 
+  const handlePinInputChange = (value: string) => {
+    const sanitized = value.replace(/\D/g, "").slice(0, 4)
+    setPinInput(sanitized)
+    if (pinError) {
+      setPinError(null)
+    }
+  }
+
+  const handleBackToUserSelection = () => {
+    setSelectedUserId(null)
+    setPinInput("")
+    setPinError(null)
+  }
+
   const handleSubmitPin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!selectedUserId) {
       setPinError("กรุณาเลือกผู้ใช้")
+      return
+    }
+
+    if (pinInput.length < 4) {
+      setPinError("กรุณากรอกรหัส PIN ให้ครบ 4 หลัก")
       return
     }
 
@@ -232,6 +252,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
       setIsVerifyingPin(false)
     }
   }
+
+  useEffect(() => {
+    if (selectedUser && isUserSelectorOpen && pinInputRef.current) {
+      pinInputRef.current.focus()
+    }
+  }, [selectedUser, isUserSelectorOpen])
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -555,139 +581,223 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
         onClick={handleExitEdit}
       >
         {isUserSelectorOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur"
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#0f1117]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.6)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-semibold">เลือกผู้ใช้</h2>
-                  <p className="mt-1 text-sm text-white/70">
-                    เลือกบัญชีและกรอกรหัส PIN เพื่อดูรูปภาพในโฟลเดอร์ของคุณ
-                  </p>
-                </div>
-                {canDismissUserSelector && (
-                  <button
-                    type="button"
-                    onClick={() => setIsUserSelectorOpen(false)}
-                    className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
-                  >
-                    ปิด
-                  </button>
-                )}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-10 backdrop-blur-sm">
+            <div
+              className="relative w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-[#0b0d13]/95 via-[#0b0d13]/90 to-[#141822]/95 p-6 text-white shadow-[0_40px_100px_rgba(0,0,0,0.55)] sm:p-10"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute left-1/2 top-[-40%] h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.12),transparent_65%)] blur-3xl" />
+                <div className="absolute -left-20 bottom-[-30%] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle_at_center,rgba(244,114,182,0.12),transparent_65%)] blur-3xl" />
+                <div className="absolute inset-x-0 bottom-0 h-[280px] bg-gradient-to-t from-black/70 via-black/40 to-transparent" />
               </div>
 
-              {users.length > 0 ? (
-                <>
-                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                    {users.map((user) => {
-                      const isActiveCard = selectedUserId === user.id
-                      const avatarUrl = buildAvatarUrl(user, 200)
-                      const initials = user.displayName
-                        .split(" ")
-                        .filter(Boolean)
-                        .map((part) => part[0]?.toUpperCase())
-                        .join("")
-                        .slice(0, 2) || "?"
+              <div className="relative z-10 flex flex-col gap-8">
+                {users.length > 0 ? (
+                  <>
+                    {!selectedUser ? (
+                      <>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/45">Who's watching?</p>
+                            <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">เลือกผู้ใช้ของคุณ</h2>
+                            <p className="mt-2 max-w-xl text-sm text-white/70">
+                              แตะไอคอนโปรไฟล์เพื่อเปิดดูรูปภาพในโฟลเดอร์ส่วนตัวของคุณ
+                            </p>
+                          </div>
+                          {canDismissUserSelector && (
+                            <button
+                              type="button"
+                              onClick={() => setIsUserSelectorOpen(false)}
+                              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
+                            >
+                              ปิด
+                            </button>
+                          )}
+                        </div>
 
-                      return (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => handleSelectUser(user.id)}
-                          className={`group relative flex flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-center transition ${
-                            isActiveCard
-                              ? "border-cyan-400/80 bg-cyan-400/10 text-white shadow-[0_12px_40px_rgba(34,211,238,0.35)]"
-                              : "border-white/10 bg-white/[0.02] text-white/80 hover:border-white/30 hover:text-white"
-                          }`}
-                          aria-pressed={isActiveCard}
-                        >
-                          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/40 shadow-inner shadow-black/50">
-                            {avatarUrl ? (
-                              <Image
-                                src={avatarUrl}
-                                alt={user.displayName}
-                                width={96}
-                                height={96}
-                                className="h-full w-full object-cover"
+                        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3">
+                          {users.map((user) => {
+                            const isActiveCard = selectedUserId === user.id
+                            const avatarUrl = buildAvatarUrl(user, 200)
+                            const initials = user.displayName
+                              .split(" ")
+                              .filter(Boolean)
+                              .map((part) => part[0]?.toUpperCase())
+                              .join("")
+                              .slice(0, 2) || "?"
+
+                            return (
+                              <button
+                                key={user.id}
+                                type="button"
+                                onClick={() => handleSelectUser(user.id)}
+                                className={`group relative flex flex-col items-center gap-4 rounded-3xl border px-6 py-8 text-center transition ${
+                                  isActiveCard
+                                    ? "border-cyan-400/90 bg-cyan-400/15 text-white shadow-[0_20px_45px_rgba(34,211,238,0.35)]"
+                                    : "border-white/10 bg-white/[0.03] text-white/80 hover:-translate-y-1 hover:border-white/35 hover:text-white"
+                                }`}
+                                aria-pressed={isActiveCard}
+                              >
+                                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/50 shadow-inner shadow-black/50">
+                                  {avatarUrl ? (
+                                    <Image
+                                      src={avatarUrl}
+                                      alt={user.displayName}
+                                      width={96}
+                                      height={96}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-2xl font-semibold text-white/85">{initials}</span>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-base font-semibold text-white">{user.displayName}</span>
+                                  <span className="text-[11px] uppercase tracking-[0.4em] text-white/45">{user.folder}</span>
+                                  {user.pinHint && (
+                                    <span className="text-[11px] text-white/40">{user.pinHint}</span>
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/45">Profile lock</p>
+                            <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">ใส่รหัส PIN เพื่อเข้าถึงโปรไฟล์นี้</h2>
+                            <p className="mt-2 max-w-xl text-sm text-white/70">
+                              ป้อนรหัสผ่าน 4 หลักเพื่อปลดล็อกและดูรูปของ {selectedUser.displayName}
+                            </p>
+                          </div>
+                          {canDismissUserSelector && (
+                            <button
+                              type="button"
+                              onClick={() => setIsUserSelectorOpen(false)}
+                              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
+                            >
+                              ปิด
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-center sm:gap-8 sm:text-left">
+                          <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl border border-white/15 bg-black/50 shadow-inner shadow-black/40">
+                            {(() => {
+                              const avatar = buildAvatarUrl(selectedUser, 240)
+                              if (avatar) {
+                                return (
+                                  <Image
+                                    src={avatar}
+                                    alt={selectedUser.displayName}
+                                    width={112}
+                                    height={112}
+                                    className="h-full w-full object-cover"
+                                  />
+                                )
+                              }
+
+                              const initials = selectedUser.displayName
+                                .split(" ")
+                                .filter(Boolean)
+                                .map((part) => part[0]?.toUpperCase())
+                                .join("")
+                                .slice(0, 2) || "?"
+
+                              return <span className="text-3xl font-semibold text-white/85">{initials}</span>
+                            })()}
+                          </div>
+                          <div className="flex flex-col items-center gap-2 sm:items-start">
+                            <span className="text-sm font-semibold uppercase tracking-[0.35em] text-white/55">กำลังปลดล็อก</span>
+                            <span className="text-2xl font-semibold text-white">{selectedUser.displayName}</span>
+                            <span className="text-xs uppercase tracking-[0.3em] text-white/40">โฟลเดอร์: {selectedUser.folder}</span>
+                            {selectedUser.pinHint && (
+                              <span className="text-xs text-white/45">คำใบ้ PIN: {selectedUser.pinHint}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <form className="flex flex-col gap-4" onSubmit={handleSubmitPin}>
+                          <div className="flex flex-col gap-3">
+                            <label
+                              id="pin-input-label"
+                              htmlFor="pin-input"
+                              className="text-xs font-semibold uppercase tracking-[0.4em] text-white/45"
+                            >
+                              รหัส PIN 4 หลัก
+                            </label>
+                            <div
+                              role="group"
+                              aria-labelledby="pin-input-label"
+                              className="relative rounded-3xl border border-white/15 bg-black/40 px-4 py-6 shadow-inner shadow-black/40"
+                            >
+                              <input
+                                ref={pinInputRef}
+                                id="pin-input"
+                                type="password"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                autoComplete="off"
+                                value={pinInput}
+                                onChange={(event) => handlePinInputChange(event.target.value)}
+                                disabled={isVerifyingPin}
+                                maxLength={4}
+                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                aria-label="กรอกรหัส PIN 4 หลัก"
                               />
-                            ) : (
-                              <span className="text-2xl font-semibold text-white/80">{initials}</span>
-                            )}
+                              <div className="pointer-events-none flex items-center justify-center gap-4">
+                                {Array.from({ length: 4 }).map((_, index) => {
+                                  const char = pinInput[index]
+                                  return (
+                                    <div
+                                      key={index}
+                                      className={`flex h-14 w-14 items-center justify-center rounded-2xl border text-2xl font-semibold transition ${
+                                        char
+                                          ? "border-cyan-400/70 bg-cyan-400/15 text-white"
+                                          : "border-white/15 bg-white/[0.03] text-white/30"
+                                      }`}
+                                    >
+                                      {char ? "•" : ""}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                            {pinError && <p className="text-xs text-red-300">{pinError}</p>}
                           </div>
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="text-base font-semibold text-white">{user.displayName}</span>
-                            <span className="text-xs uppercase tracking-[0.28em] text-white/50">{user.folder}</span>
-                            {user.pinHint && (
-                              <span className="text-[11px] text-white/40">{user.pinHint}</span>
-                            )}
+
+                          <div className="mt-2 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              type="button"
+                              onClick={handleBackToUserSelection}
+                              disabled={isVerifyingPin}
+                              className="rounded-full border border-white/15 px-5 py-2 text-sm font-semibold text-white/80 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              ย้อนกลับ
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={pinInput.length < 4 || isVerifyingPin}
+                              className="rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-white shadow-[0_16px_35px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
+                            >
+                              {isVerifyingPin ? "กำลังตรวจสอบ..." : "ปลดล็อกโปรไฟล์"}
+                            </button>
                           </div>
-                        </button>
-                      )
-                    })}
+                        </form>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-white/70">
+                    ยังไม่มีผู้ใช้ในระบบ โปรดเพิ่มข้อมูลผู้ใช้ใน MongoDB ก่อน
                   </div>
-
-                  <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmitPin}>
-                    <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
-                        ผู้ใช้ที่เลือก
-                      </p>
-                      <p className="mt-2 text-sm text-white/80">
-                        {selectedUser ? selectedUser.displayName : "ยังไม่ได้เลือกผู้ใช้"}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <label
-                        htmlFor="pin-input"
-                        className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45"
-                      >
-                        รหัส PIN
-                      </label>
-                      <input
-                        id="pin-input"
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="off"
-                        value={pinInput}
-                        onChange={(event) => setPinInput(event.target.value)}
-                        disabled={!selectedUser || isVerifyingPin}
-                        placeholder="กรอกรหัส 4 หลัก"
-                        className="w-full rounded-xl border border-white/20 bg-black/50 px-4 py-2 text-center text-lg tracking-[0.35em] text-white shadow-inner shadow-black/30 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
-                      {pinError && (
-                        <p className="text-xs text-red-300">{pinError}</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3">
-                      {canDismissUserSelector && (
-                        <button
-                          type="button"
-                          onClick={() => setIsUserSelectorOpen(false)}
-                          className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/35 hover:text-white"
-                        >
-                          ยกเลิก
-                        </button>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={!selectedUser || pinInput.trim() === "" || isVerifyingPin}
-                        className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
-                      >
-                        {isVerifyingPin ? "กำลังตรวจสอบ..." : "เข้าสู่ระบบ"}
-                      </button>
-                    </div>
-                  </form>
-                </>
-              ) : (
-                <div className="mt-6 rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-white/70">
-                  ยังไม่มีผู้ใช้ในระบบ โปรดเพิ่มข้อมูลผู้ใช้ใน MongoDB ก่อน
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
