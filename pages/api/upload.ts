@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import cloudinary from "../../utils/cloudinary"
 import { ensureAuthenticatedUser } from "../../utils/session"
 
+
+
 export const config = {
   api: {
     bodyParser: {

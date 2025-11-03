@@ -748,8 +748,8 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/60">
                                   {avatarUrl ? (
                                     <Image
-                                      src={avatarUrl}
-                                      alt={user.displayName}
+                                      src="/user.png"
+                                      alt={user.displayName || "User avatar"}
                                       width={80}
                                       height={80}
                                       className="h-full w-full object-cover"
@@ -760,10 +760,10 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                                 </div>
                                 <div className="flex flex-col items-center gap-1">
                                   <span className="text-sm font-semibold text-white">{user.displayName}</span>
-                                  <span className="text-[10px] uppercase tracking-[0.35em] text-white/45">{user.folder}</span>
-                                  {user.pinHint && (
+                                  {/* <span className="text-[10px] uppercase tracking-[0.35em] text-white/45">{user.folder}</span> */}
+                                  {/* {user.pinHint && (
                                     <span className="text-[10px] text-white/40">{user.pinHint}</span>
-                                  )}
+                                  )} */}
                                 </div>
                               </button>
                             )
@@ -798,7 +798,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                               if (avatar) {
                                 return (
                                   <Image
-                                    src={avatar}
+                                    src="/user.png"
                                     alt={selectedUser.displayName}
                                     width={96}
                                     height={96}
@@ -820,10 +820,10 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                           <div className="flex flex-col items-center gap-1.5 sm:items-start">
                             <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">กำลังปลดล็อก</span>
                             <span className="text-lg font-semibold text-white">{selectedUser.displayName}</span>
-                            <span className="text-[11px] uppercase tracking-[0.28em] text-white/40">โฟลเดอร์: {selectedUser.folder}</span>
-                            {selectedUser.pinHint && (
+                            {/* <span className="text-[11px] uppercase tracking-[0.28em] text-white/40">โฟลเดอร์: {selectedUser.folder}</span> */}
+                            {/* {selectedUser.pinHint && (
                               <span className="text-[11px] text-white/45">คำใบ้ PIN: {selectedUser.pinHint}</span>
-                            )}
+                            )} */}
                           </div>
                         </div>
 
@@ -947,7 +947,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40">
                           {activeUserAvatarUrl ? (
                             <Image
-                              src={activeUserAvatarUrl}
+                              src="/user.png"
                               alt={resolvedActiveUser.displayName}
                               width={56}
                               height={56}
@@ -1084,7 +1084,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                       <strong className="font-semibold">อัปโหลดไม่สำเร็จ:</strong> {uploadError}
                       <br />
                       <span className="text-xs text-red-200">
-                        โปรดตรวจสอบค่า Upload Preset ใน Cloudinary และไฟล์ .env.local
+                        โปรดตรวจสอบค่า Upload Preset 
                       </span>
                     </div>
                   )}
