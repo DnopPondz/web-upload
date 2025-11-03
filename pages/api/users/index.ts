@@ -22,6 +22,7 @@ export default async function handler(
           folder: 1,
           avatarPublicId: 1,
           pinHint: 1,
+          role: 1,
         },
       })
       .sort({ displayName: 1 })

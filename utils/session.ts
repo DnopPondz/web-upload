@@ -2,7 +2,7 @@ import type { NextApiResponse } from "next"
 import { createHmac, timingSafeEqual } from "crypto"
 import { ObjectId } from "mongodb"
 import clientPromise from "./mongodb"
-import type { GalleryUser } from "./types"
+import type { GalleryUser, GalleryUserRole } from "./types"
 
 const SESSION_COOKIE_NAME = "galleryAuth"
 const SESSION_MAX_AGE = 60 * 60 * 12 // 12 hours
@@ -66,12 +66,15 @@ const serializeCookie = (name: string, value: string, options: CookieOptions = {
   return segments.join("; ")
 }
 
+const resolveRole = (role: any): GalleryUserRole => (role === "admin" ? "admin" : "member")
+
 export const mapUserDocument = (doc: any): GalleryUser => ({
   id: doc._id.toString(),
   displayName: doc.displayName,
   folder: doc.folder,
   avatarPublicId: doc.avatarPublicId ?? undefined,
   pinHint: doc.pinHint ?? undefined,
+  role: resolveRole(doc.role),
 })
 
 export const signUserSession = (userId: string) => `${userId}.${createSignature(userId)}`

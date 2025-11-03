@@ -181,6 +181,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   )
   const canDismissUserSelector = Boolean(activeUser)
   const activeUserAvatarUrl = activeUser ? buildAvatarUrl(activeUser, 160) : null
+  const isActiveUserAdmin = activeUser?.role === "admin"
   const activeUserInitials = useMemo(() => {
     if (!activeUser?.displayName) return "?"
     return (
@@ -855,6 +856,14 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                         </div>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-3">
+                        {isActiveUserAdmin && (
+                          <Link
+                            href="/admin/users"
+                            className="rounded-full border border-sky-400/60 px-4 py-2 text-xs font-semibold text-sky-100 transition hover:border-sky-300 hover:text-sky-50"
+                          >
+                            สร้างผู้ใช้
+                          </Link>
+                        )}
                         <button
                           type="button"
                           onClick={() => setIsUserSelectorOpen(true)}
@@ -1351,6 +1360,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
             folder: 1,
             avatarPublicId: 1,
             pinHint: 1,
+            role: 1,
           },
         },
       )

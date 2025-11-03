@@ -10,12 +10,15 @@ export interface ImageProps {
   description?: string;
 }
 
+export type GalleryUserRole = "admin" | "member";
+
 export interface GalleryUser {
   id: string;
   displayName: string;
   folder: string;
   avatarPublicId?: string;
   pinHint?: string;
+  role: GalleryUserRole;
 }
 
 export interface SharedModalProps {

@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Method not allowed" })
   }
 
-  const { displayName, folder, pin, pinHint, avatarPublicId } = req.body || {}
+  const { displayName, folder, pin, pinHint, avatarPublicId, role } = req.body || {}
 
   if (!isNonEmptyString(displayName)) {
     return res.status(400).json({ error: "กรุณาระบุชื่อผู้ใช้" })
@@ -34,6 +34,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (avatarPublicId !== undefined && typeof avatarPublicId !== "string") {
     return res.status(400).json({ error: "รหัสรูปโปรไฟล์ไม่ถูกต้อง" })
+  }
+
+  if (role !== undefined && role !== "admin" && role !== "member") {
+    return res.status(400).json({ error: "สิทธิ์ของผู้ใช้ไม่ถูกต้อง" })
   }
 
   try {
@@ -61,6 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       pinHash: createPinHash(pin),
       avatarPublicId: avatarPublicId?.trim() || undefined,
       pinHint: pinHint?.trim() || undefined,
+      role: role === "admin" ? "admin" : "member",
       createdAt: new Date(),
       updatedAt: new Date(),
     })
