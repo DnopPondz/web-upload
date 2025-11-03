@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import { ObjectId } from "mongodb"
 import clientPromise from "../../../utils/mongodb"
-import { createPinHash } from "../../../utils/pinHash"
+import { createPinHash, verifyPinHash } from "../../../utils/pinHash"
 import { ensureAuthenticatedUser, mapUserDocument } from "../../../utils/session"
 
 const isValidPin = (pin: unknown): pin is string =>
@@ -20,7 +20,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(statusCode).json({ error: error?.message || "ไม่สามารถตรวจสอบสิทธิ์ได้" })
   }
 
-  const { newPin, pinHint } = req.body || {}
+  const { currentPin, newPin, pinHint } = req.body || {}
+
+  if (!isValidPin(currentPin)) {
+    return res.status(400).json({ error: "กรุณากรอกรหัส PIN เดิมให้ถูกต้อง" })
+  }
 
   if (!isValidPin(newPin)) {
     return res.status(400).json({ error: "กรุณากรอกรหัส PIN เป็นตัวเลข 4 ถึง 10 หลัก" })
@@ -34,6 +38,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const client = await clientPromise
     const db = client.db(process.env.MONGODB_DB || "img-detail")
     const collection = db.collection("galleryUsers")
+
+    const existingUser = await collection.findOne(
+      { _id: new ObjectId(user.id) },
+      { projection: { pinHash: 1 } },
+    )
+
+    if (!existingUser || typeof existingUser.pinHash !== "string") {
+      return res.status(404).json({ error: "ไม่พบผู้ใช้" })
+    }
+
+    if (!verifyPinHash(currentPin, existingUser.pinHash)) {
+      return res.status(401).json({ error: "รหัส PIN เดิมไม่ถูกต้อง" })
+    }
 
     const updateOperations: Record<string, any> = {
       $set: {

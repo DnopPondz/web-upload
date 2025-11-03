@@ -51,7 +51,7 @@ The gallery now supports per-user folders that are protected with a PIN code.
    fields include `avatarPublicId` and `pinHint`.
 
    Signed-in members can update their own credentials through the in-app "รีเซ็ต PIN" dialog, which sends a `POST /api/users/reset-pin`
-   request with a new PIN and optional hint.
+   request that verifies the current PIN before accepting a new PIN and optional hint.
 
 2. Upload user photos to Cloudinary folders that match the `folder` field.
 

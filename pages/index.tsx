@@ -51,6 +51,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pinInputRef = useRef<HTMLInputElement | null>(null)
   const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false)
+  const [currentPinValue, setCurrentPinValue] = useState("")
   const [newPinValue, setNewPinValue] = useState("")
   const [confirmPinValue, setConfirmPinValue] = useState("")
   const [pinHintValue, setPinHintValue] = useState(activeUser?.pinHint ?? "")
@@ -67,6 +68,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     setPinHintValue(activeUser?.pinHint ?? "")
     if (!activeUser) {
       setIsResetPinDialogOpen(false)
+      setCurrentPinValue("")
       setNewPinValue("")
       setConfirmPinValue("")
       setResetPinError(null)
@@ -305,6 +307,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
       return
     }
 
+    setCurrentPinValue("")
     setNewPinValue("")
     setConfirmPinValue("")
     setPinHintValue(resolvedActiveUser.pinHint ?? "")
@@ -316,6 +319,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const handleCloseResetPinDialog = () => {
     if (isResettingPin) return
     setIsResetPinDialogOpen(false)
+    setCurrentPinValue("")
     setNewPinValue("")
     setConfirmPinValue("")
     setResetPinError(null)
@@ -328,6 +332,11 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
 
     if (!resolvedActiveUser) {
       setResetPinError("กรุณาเลือกผู้ใช้ก่อนรีเซ็ต PIN")
+      return
+    }
+
+    if (!/^[0-9]{4,10}$/.test(currentPinValue)) {
+      setResetPinError("กรุณากรอกรหัส PIN เดิมให้ถูกต้อง")
       return
     }
 
@@ -351,6 +360,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
+          currentPin: currentPinValue,
           newPin: newPinValue,
           pinHint: pinHintValue,
         }),
@@ -368,6 +378,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
       }
 
       setResetPinSuccess("รีเซ็ต PIN เรียบร้อยแล้ว")
+      setCurrentPinValue("")
       setNewPinValue("")
       setConfirmPinValue("")
     } catch (error: any) {
@@ -1390,6 +1401,24 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
 
             <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmitResetPin}>
               <div className="flex flex-col gap-1">
+                <label htmlFor="current-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  รหัส PIN เดิม
+                </label>
+                <input
+                  id="current-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={currentPinValue}
+                  onChange={(event) => setCurrentPinValue(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="กรอกรหัส PIN ปัจจุบัน"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
                 <label htmlFor="new-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
                   รหัส PIN ใหม่
                 </label>
@@ -1451,7 +1480,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                 <button
                   type="submit"
                   className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(16,185,129,0.35)] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/60"
-                  disabled={isResettingPin || newPinValue.length < 4 || confirmPinValue.length < 4}
+                  disabled={
+                    isResettingPin ||
+                    currentPinValue.length < 4 ||
+                    newPinValue.length < 4 ||
+                    confirmPinValue.length < 4
+                  }
                 >
                   {isResettingPin ? "กำลังบันทึก..." : "บันทึก PIN"}
                 </button>
