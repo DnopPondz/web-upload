@@ -1,7 +1,7 @@
 "use client"
 
 import { TrashIcon } from "@heroicons/react/24/outline"
-import type { NextPage } from "next"
+import type { GetServerSidePropsContext, NextPage } from "next"
 import Head from "next/head"
 import Image from "next/image"
 import Link from "next/link"
@@ -13,15 +13,23 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
   type FormEvent,
+  type ChangeEvent,
 } from "react"
 import Bridge from "../components/Icons/Bridge"
 import Modal from "../components/Modal"
 import cloudinary from "../utils/cloudinary"
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder"
-import type { ImageProps } from "../utils/types"
+import { clearSessionCookie, getAuthenticatedUser, mapUserDocs, SESSION_COOKIE_NAME } from "../utils/session"
+import type { GalleryUser, ImageProps } from "../utils/types"
 import { useLastViewedPhoto } from "../utils/useLastViewedPhoto"
 
-const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
+type HomeProps = {
+  images: ImageProps[]
+  users: GalleryUser[]
+  activeUser: GalleryUser | null
+}
+
+const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const router = useRouter()
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
 
@@ -35,9 +43,80 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
     { type: "success" | "error"; message: string } | null
   >(null)
 
+  const [activeUserState, setActiveUserState] = useState<GalleryUser | null>(activeUser)
+  const [isSelectorOpen, setIsSelectorOpen] = useState(!activeUser)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [pinInput, setPinInput] = useState("")
+  const [pinError, setPinError] = useState<string | null>(null)
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const pinInputRef = useRef<HTMLInputElement | null>(null)
+  const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false)
+  const [currentPinValue, setCurrentPinValue] = useState("")
+  const [newPinValue, setNewPinValue] = useState("")
+  const [confirmPinValue, setConfirmPinValue] = useState("")
+  const [pinHintValue, setPinHintValue] = useState(activeUser?.pinHint ?? "")
+  const [resetPinError, setResetPinError] = useState<string | null>(null)
+  const [resetPinSuccess, setResetPinSuccess] = useState<string | null>(null)
+  const [isResettingPin, setIsResettingPin] = useState(false)
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false)
+  const [avatarUploadDataUrl, setAvatarUploadDataUrl] = useState<string | null>(null)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null)
+  const [avatarUploadSuccess, setAvatarUploadSuccess] = useState<string | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
+
   useEffect(() => {
     setImageData(images)
   }, [images])
+
+  useEffect(() => {
+    setActiveUserState(activeUser)
+    setPinHintValue(activeUser?.pinHint ?? "")
+    if (!activeUser) {
+      setIsResetPinDialogOpen(false)
+      setCurrentPinValue("")
+      setNewPinValue("")
+      setConfirmPinValue("")
+      setResetPinError(null)
+      setResetPinSuccess(null)
+    }
+  }, [activeUser])
+
+  useEffect(() => {
+    setIsSelectorOpen(!activeUser)
+    if (!activeUser) {
+      setSelectedUserId(null)
+      setPinInput("")
+      setPinError(null)
+    }
+  }, [activeUser])
+
+  useEffect(() => {
+    if (resolvedActiveUser) return
+    setIsAvatarModalOpen(false)
+    handleClearAvatarSelection()
+    setAvatarUploadSuccess(null)
+  }, [resolvedActiveUser])
+
+  useEffect(() => {
+    setAlbumFilter("__all__")
+    setEditMode(false)
+    setDeleteTarget(null)
+  }, [activeUser])
+
+  useEffect(() => {
+    if (!isSelectorOpen) {
+      setPinInput("")
+      setPinError(null)
+    }
+  }, [isSelectorOpen])
+
+  useEffect(() => {
+    if (isSelectorOpen && users.length === 1 && !selectedUserId) {
+      setSelectedUserId(users[0].id)
+    }
+  }, [isSelectorOpen, users, selectedUserId])
 
   const sizePresets = {
     small: { label: "เล็ก", width: 480, height: 320 },
@@ -125,6 +204,307 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const holdTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressTriggeredRef = useRef(false)
   const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
+
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  const buildAvatarUrl = (user: GalleryUser, size: number) => {
+    if (!cloudName || !user.avatarPublicId) return null
+    return `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,g_auto,w=${size},h=${size}/${user.avatarPublicId}`
+  }
+
+  const selectedUser = useMemo(
+    () => users.find((user) => user.id === selectedUserId) ?? null,
+    [users, selectedUserId],
+  )
+  const resolvedActiveUser = activeUserState ?? activeUser ?? null
+  const canDismissUserSelector = Boolean(resolvedActiveUser)
+  const activeUserAvatarUrl = resolvedActiveUser ? buildAvatarUrl(resolvedActiveUser, 160) : null
+  const activeUserLargeAvatarUrl = resolvedActiveUser ? buildAvatarUrl(resolvedActiveUser, 320) : null
+  const isActiveUserAdmin = resolvedActiveUser?.role === "admin"
+  const activeUserInitials = useMemo(() => {
+    if (!resolvedActiveUser?.displayName) return "?"
+    return (
+      resolvedActiveUser.displayName
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part[0]?.toUpperCase())
+        .join("")
+        .slice(0, 2) || "?"
+    )
+  }, [resolvedActiveUser])
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUserId(userId)
+    setPinInput("")
+    setPinError(null)
+  }
+
+  const handlePinInputChange = (value: string) => {
+    const sanitized = value.replace(/\D/g, "").slice(0, 4)
+    setPinInput(sanitized)
+    if (pinError) {
+      setPinError(null)
+    }
+  }
+
+  const handleBackToUserSelection = () => {
+    setSelectedUserId(null)
+    setPinInput("")
+    setPinError(null)
+  }
+
+  const handleSubmitPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selectedUserId) {
+      setPinError("กรุณาเลือกผู้ใช้")
+      return
+    }
+
+    if (pinInput.length < 4) {
+      setPinError("กรุณากรอกรหัส PIN ให้ครบ 4 หลัก")
+      return
+    }
+
+    setIsVerifyingPin(true)
+    setPinError(null)
+
+    try {
+      const response = await fetch("/api/users/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: selectedUserId, pin: pinInput }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "" }))
+        throw new Error(errorData.error || "ไม่สามารถยืนยันตัวตนได้")
+      }
+
+      setIsSelectorOpen(false)
+      setSelectedUserId(null)
+      setPinInput("")
+
+      await router.replace(router.asPath, undefined, { scroll: false })
+    } catch (error: any) {
+      setPinError(error?.message || "เกิดข้อผิดพลาดในการยืนยันตัวตน")
+    } finally {
+      setIsVerifyingPin(false)
+    }
+  }
+
+  useEffect(() => {
+    if (selectedUser && isSelectorOpen && pinInputRef.current) {
+      pinInputRef.current.focus()
+    }
+  }, [selectedUser, isSelectorOpen])
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await fetch("/api/users/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      })
+
+      setIsSelectorOpen(true)
+      await router.replace(router.asPath, undefined, { scroll: false })
+    } catch (error) {
+      console.error("Failed to logout", error)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
+
+  const handleOpenAvatarModal = () => {
+    if (!resolvedActiveUser) return
+    handleClearAvatarSelection()
+    setAvatarUploadSuccess(null)
+    setIsAvatarModalOpen(true)
+  }
+
+  const handleCloseAvatarModal = () => {
+    if (isUploadingAvatar) return
+    setIsAvatarModalOpen(false)
+    handleClearAvatarSelection()
+    setAvatarUploadSuccess(null)
+  }
+
+  const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      setAvatarUploadDataUrl(null)
+      setAvatarUploadError(null)
+      return
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarUploadDataUrl(null)
+      setAvatarUploadError("กรุณาเลือกไฟล์รูปภาพเท่านั้น")
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = ""
+      }
+      return
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      setAvatarUploadDataUrl(null)
+      setAvatarUploadError("ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 6MB)")
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = ""
+      }
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result
+      if (typeof result === "string") {
+        setAvatarUploadDataUrl(result)
+        setAvatarUploadError(null)
+        setAvatarUploadSuccess(null)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleClearAvatarSelection = () => {
+    setAvatarUploadDataUrl(null)
+    setAvatarUploadError(null)
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = ""
+    }
+  }
+
+  const handleSubmitAvatar = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (isUploadingAvatar) return
+
+    if (!avatarUploadDataUrl) {
+      setAvatarUploadError("กรุณาเลือกไฟล์รูปโปรไฟล์ก่อน")
+      return
+    }
+
+    setIsUploadingAvatar(true)
+    setAvatarUploadError(null)
+    setAvatarUploadSuccess(null)
+
+    try {
+      const response = await fetch("/api/users/update-avatar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ file: avatarUploadDataUrl }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "ไม่สามารถอัปเดตรูปโปรไฟล์ได้" }))
+        throw new Error(errorData.error || "ไม่สามารถอัปเดตรูปโปรไฟล์ได้")
+      }
+
+      const data = await response.json()
+      if (data?.user) {
+        setActiveUserState(data.user)
+        setAvatarUploadSuccess("อัปเดตรูปโปรไฟล์เรียบร้อยแล้ว")
+        setAvatarUploadDataUrl(null)
+        if (avatarInputRef.current) {
+          avatarInputRef.current.value = ""
+        }
+      }
+    } catch (error: any) {
+      setAvatarUploadError(error?.message || "ไม่สามารถอัปเดตรูปโปรไฟล์ได้")
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
+  const handleOpenResetPinDialog = () => {
+    if (!resolvedActiveUser) {
+      setResetPinError("กรุณาเลือกผู้ใช้ก่อนรีเซ็ต PIN")
+      return
+    }
+
+    setCurrentPinValue("")
+    setNewPinValue("")
+    setConfirmPinValue("")
+    setPinHintValue(resolvedActiveUser.pinHint ?? "")
+    setResetPinError(null)
+    setResetPinSuccess(null)
+    setIsResetPinDialogOpen(true)
+  }
+
+  const handleCloseResetPinDialog = () => {
+    if (isResettingPin) return
+    setIsResetPinDialogOpen(false)
+    setCurrentPinValue("")
+    setNewPinValue("")
+    setConfirmPinValue("")
+    setResetPinError(null)
+    setResetPinSuccess(null)
+  }
+
+  const handleSubmitResetPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (isResettingPin) return
+
+    if (!resolvedActiveUser) {
+      setResetPinError("กรุณาเลือกผู้ใช้ก่อนรีเซ็ต PIN")
+      return
+    }
+
+    if (!/^[0-9]{4,10}$/.test(currentPinValue)) {
+      setResetPinError("กรุณากรอกรหัส PIN เดิมให้ถูกต้อง")
+      return
+    }
+
+    if (!/^[0-9]{4,10}$/.test(newPinValue)) {
+      setResetPinError("กรุณากรอกรหัส PIN เป็นตัวเลข 4 ถึง 10 หลัก")
+      return
+    }
+
+    if (newPinValue !== confirmPinValue) {
+      setResetPinError("รหัส PIN และการยืนยันไม่ตรงกัน")
+      return
+    }
+
+    setIsResettingPin(true)
+    setResetPinError(null)
+    setResetPinSuccess(null)
+
+    try {
+      const response = await fetch("/api/users/reset-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          currentPin: currentPinValue,
+          newPin: newPinValue,
+          pinHint: pinHintValue,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "ไม่สามารถรีเซ็ต PIN ได้" }))
+        throw new Error(errorData.error || "ไม่สามารถรีเซ็ต PIN ได้")
+      }
+
+      const data = await response.json()
+      if (data?.user) {
+        setActiveUserState(data.user)
+        setPinHintValue(data.user.pinHint ?? "")
+      }
+
+      setResetPinSuccess("รีเซ็ต PIN เรียบร้อยแล้ว")
+      setCurrentPinValue("")
+      setNewPinValue("")
+      setConfirmPinValue("")
+    } catch (error: any) {
+      setResetPinError(error?.message || "ไม่สามารถรีเซ็ต PIN ได้")
+    } finally {
+      setIsResettingPin(false)
+    }
+  }
 
   const fallbackAlbumKey = "__ungrouped__"
   const fallbackAlbumLabel = "ไม่ระบุกลุ่ม"
@@ -232,6 +612,12 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    if (!resolvedActiveUser) {
+      setUploadError("กรุณาเลือกผู้ใช้ก่อนอัปโหลดรูปภาพ")
+      event.target.value = ""
+      return
+    }
 
     setIsUploading(true)
     setUploadError(null)
@@ -423,6 +809,347 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         className="relative min-h-screen select-none overflow-hidden bg-[#040507] text-white"
         onClick={handleExitEdit}
       >
+        {isSelectorOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur-sm">
+            <div
+              className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex flex-col gap-6">
+                {users.length > 0 ? (
+                  <>
+                    {!selectedUser ? (
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/45">Who's watching?</p>
+                            <h2 className="mt-2 text-2xl font-semibold sm:text-[28px]">เลือกผู้ใช้ของคุณ</h2>
+                            <p className="mt-2 max-w-sm text-xs text-white/70">
+                              แตะไอคอนโปรไฟล์เพื่อเปิดดูรูปภาพในโฟลเดอร์ส่วนตัวของคุณ
+                            </p>
+                          </div>
+                          {canDismissUserSelector && (
+                            <button
+                              type="button"
+                              onClick={() => setIsSelectorOpen(false)}
+                              className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
+                            >
+                              ปิด
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                          {users.map((user) => {
+                            const isActiveCard = selectedUserId === user.id
+                            const avatarUrl = buildAvatarUrl(user, 200)
+                            const initials = user.displayName
+                              .split(" ")
+                              .filter(Boolean)
+                              .map((part) => part[0]?.toUpperCase())
+                              .join("")
+                              .slice(0, 2) || "?"
+
+                            return (
+                              <button
+                                key={user.id}
+                                type="button"
+                                onClick={() => handleSelectUser(user.id)}
+                                className={`group relative flex flex-col items-center gap-3 rounded-2xl border px-5 py-6 text-center transition ${
+                                  isActiveCard
+                                    ? "border-cyan-400/70 bg-cyan-400/10 text-white shadow-[0_10px_30px_rgba(34,211,238,0.25)]"
+                                    : "border-white/10 bg-white/[0.04] text-white/75 hover:-translate-y-1 hover:border-white/30 hover:text-white"
+                                }`}
+                                aria-pressed={isActiveCard}
+                              >
+                                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/60">
+                                  {avatarUrl ? (
+                                    <Image
+                                      src={avatarUrl}
+                                      alt={user.displayName}
+                                      width={80}
+                                      height={80}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-xl font-semibold text-white/85">{initials}</span>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-sm font-semibold text-white">{user.displayName}</span>
+                                  <span className="text-[10px] uppercase tracking-[0.35em] text-white/45">{user.folder}</span>
+                                  {user.pinHint && (
+                                    <span className="text-[10px] text-white/40">{user.pinHint}</span>
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/45">Profile lock</p>
+                            <h2 className="mt-2 text-2xl font-semibold sm:text-[28px]">ใส่รหัส PIN เพื่อเข้าถึงโปรไฟล์นี้</h2>
+                            <p className="mt-2 max-w-sm text-xs text-white/70">
+                              ป้อนรหัสผ่าน 4 หลักเพื่อปลดล็อกและดูรูปของ {selectedUser.displayName}
+                            </p>
+                          </div>
+                          {canDismissUserSelector && (
+                            <button
+                              type="button"
+                              onClick={() => setIsSelectorOpen(false)}
+                              className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
+                            >
+                              ปิด
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
+                          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-black/55">
+                            {(() => {
+                              const avatar = buildAvatarUrl(selectedUser, 240)
+                              if (avatar) {
+                                return (
+                                  <Image
+                                    src={avatar}
+                                    alt={selectedUser.displayName}
+                                    width={96}
+                                    height={96}
+                                    className="h-full w-full object-cover"
+                                  />
+                                )
+                              }
+
+                              const initials = selectedUser.displayName
+                                .split(" ")
+                                .filter(Boolean)
+                                .map((part) => part[0]?.toUpperCase())
+                                .join("")
+                                .slice(0, 2) || "?"
+
+                              return <span className="text-2xl font-semibold text-white/85">{initials}</span>
+                            })()}
+                          </div>
+                          <div className="flex flex-col items-center gap-1.5 sm:items-start">
+                            <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">กำลังปลดล็อก</span>
+                            <span className="text-lg font-semibold text-white">{selectedUser.displayName}</span>
+                            <span className="text-[11px] uppercase tracking-[0.28em] text-white/40">โฟลเดอร์: {selectedUser.folder}</span>
+                            {selectedUser.pinHint && (
+                              <span className="text-[11px] text-white/45">คำใบ้ PIN: {selectedUser.pinHint}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <form className="flex flex-col gap-4" onSubmit={handleSubmitPin}>
+                          <div className="flex flex-col gap-2.5">
+                            <label
+                              id="pin-input-label"
+                              htmlFor="pin-input"
+                              className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/45"
+                            >
+                              รหัส PIN 4 หลัก
+                            </label>
+                            <div
+                              role="group"
+                              aria-labelledby="pin-input-label"
+                              className="relative rounded-2xl border border-white/15 bg-black/50 px-3 py-4"
+                            >
+                              <input
+                                ref={pinInputRef}
+                                id="pin-input"
+                                type="password"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                autoComplete="off"
+                                value={pinInput}
+                                onChange={(event) => handlePinInputChange(event.target.value)}
+                                disabled={isVerifyingPin}
+                                maxLength={4}
+                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                aria-label="กรอกรหัส PIN 4 หลัก"
+                              />
+                              <div className="pointer-events-none flex items-center justify-center gap-3">
+                                {Array.from({ length: 4 }).map((_, index) => {
+                                  const char = pinInput[index]
+                                  return (
+                                    <div
+                                      key={index}
+                                      className={`flex h-12 w-12 items-center justify-center rounded-xl border text-xl font-semibold transition ${
+                                        char
+                                          ? "border-cyan-400/70 bg-cyan-400/15 text-white"
+                                          : "border-white/15 bg-white/[0.03] text-white/30"
+                                      }`}
+                                    >
+                                      {char ? "•" : ""}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                            {pinError && <p className="text-[11px] text-red-300">{pinError}</p>}
+                          </div>
+
+                          <div className="mt-2 flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              type="button"
+                              onClick={handleBackToUserSelection}
+                              disabled={isVerifyingPin}
+                              className="rounded-full border border-white/15 px-4 py-1.5 text-sm font-semibold text-white/80 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              ย้อนกลับ
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={pinInput.length < 4 || isVerifyingPin}
+                              className="rounded-full bg-cyan-500 px-5 py-1.5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
+                            >
+                              {isVerifyingPin ? "กำลังตรวจสอบ..." : "ปลดล็อกโปรไฟล์"}
+                            </button>
+                          </div>
+                        </form>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-white/70">
+                    ยังไม่มีผู้ใช้ในระบบ โปรดเพิ่มข้อมูลผู้ใช้ใน MongoDB ก่อน
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isAvatarModalOpen && resolvedActiveUser && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur-sm"
+            onClick={handleCloseAvatarModal}
+            data-edit-keep
+          >
+            <div
+              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="avatar-modal-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex flex-col gap-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/45">Profile avatar</p>
+                    <h2 id="avatar-modal-title" className="mt-2 text-xl font-semibold sm:text-2xl">
+                      อัปเดตรูปโปรไฟล์
+                    </h2>
+                    <p className="mt-2 text-xs text-white/70">
+                      เลือกไฟล์ใหม่เพื่อแทนที่รูปโปรไฟล์ของ {resolvedActiveUser.displayName}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseAvatarModal}
+                    className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/70 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isUploadingAvatar}
+                  >
+                    ปิด
+                  </button>
+                </div>
+
+                <form className="flex flex-col gap-5" onSubmit={handleSubmitAvatar}>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-black/60 shadow-inner shadow-black/40">
+                      {avatarUploadDataUrl ? (
+                        <img
+                          src={avatarUploadDataUrl}
+                          alt="ตัวอย่างรูปโปรไฟล์ใหม่"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : activeUserLargeAvatarUrl ? (
+                        <Image
+                          src={activeUserLargeAvatarUrl}
+                          alt={resolvedActiveUser.displayName}
+                          width={112}
+                          height={112}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-2xl font-semibold text-white/80">{activeUserInitials}</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-white/45">รองรับไฟล์ JPG, PNG และ WEBP (สูงสุด 6MB)</p>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <label
+                      htmlFor="avatar-upload-input"
+                      className="text-xs font-semibold uppercase tracking-[0.35em] text-white/45"
+                    >
+                      เลือกไฟล์รูปโปรไฟล์
+                    </label>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      id="avatar-upload-input"
+                      accept="image/*"
+                      onChange={handleAvatarFileChange}
+                      className="hidden"
+                      data-edit-keep
+                    />
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label
+                        htmlFor="avatar-upload-input"
+                        className={`inline-flex cursor-pointer items-center rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
+                          isUploadingAvatar ? "cursor-not-allowed opacity-60" : "hover:border-white/40 hover:text-white"
+                        }`}
+                        aria-disabled={isUploadingAvatar}
+                        data-edit-keep
+                      >
+                        เลือกไฟล์ใหม่
+                      </label>
+                      {avatarUploadDataUrl && (
+                        <button
+                          type="button"
+                          onClick={handleClearAvatarSelection}
+                          className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          data-edit-keep
+                          disabled={isUploadingAvatar}
+                        >
+                          ล้างไฟล์
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {avatarUploadError && <p className="text-[11px] text-red-300">{avatarUploadError}</p>}
+                  {avatarUploadSuccess && <p className="text-[11px] text-emerald-300">{avatarUploadSuccess}</p>}
+
+                  <div className="mt-2 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={handleCloseAvatarModal}
+                      className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isUploadingAvatar}
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isUploadingAvatar || !avatarUploadDataUrl}
+                      className="rounded-full bg-cyan-500 px-5 py-2 text-xs font-semibold text-white shadow-[0_8px_20px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
+                    >
+                      {isUploadingAvatar ? "กำลังอัปเดต..." : "บันทึกรูปโปรไฟล์"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-1/2 top-[-35%] h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.18),transparent_65%)] blur-3xl" />
           <div className="absolute inset-x-0 bottom-0 h-[420px] bg-gradient-to-t from-black via-black/70 to-transparent" />
@@ -456,6 +1183,86 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
           <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:p-10">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center">
               <div className="flex flex-col gap-6 text-left">
+                <div className="rounded-2xl border border-white/10 bg-black/40 p-4 shadow-inner shadow-black/20">
+                  {resolvedActiveUser ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={handleOpenAvatarModal}
+                          className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40 transition hover:border-cyan-300/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+                          data-edit-keep
+                        >
+                          <span className="sr-only">เปลี่ยนรูปโปรไฟล์</span>
+                          {activeUserAvatarUrl ? (
+                            <Image
+                              src={activeUserAvatarUrl}
+                              alt={resolvedActiveUser.displayName}
+                              width={56}
+                              height={56}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-lg font-semibold text-white/80">{activeUserInitials}</span>
+                          )}
+                        </button>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
+                            กำลังดูแกลเลอรีของ
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-white">{resolvedActiveUser.displayName}</p>
+                          <p className="text-xs text-white/60">โฟลเดอร์: {resolvedActiveUser.folder}</p>
+                          <p className="mt-1 text-[11px] text-white/45">แตะรูปโปรไฟล์เพื่อแก้ไขหรืออัปโหลดใหม่</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {isActiveUserAdmin && (
+                          <Link
+                            href="/admin/users"
+                            className="rounded-full border border-sky-400/60 px-4 py-2 text-xs font-semibold text-sky-100 transition hover:border-sky-300 hover:text-sky-50"
+                          >
+                            สร้างผู้ใช้
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleOpenResetPinDialog}
+                          className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300 hover:text-emerald-50"
+                        >
+                          รีเซ็ต PIN
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsSelectorOpen(true)}
+                          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
+                        >
+                          สลับผู้ใช้
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          disabled={isLoggingOut}
+                          className="rounded-full border border-red-400/60 px-4 py-2 text-xs font-semibold text-red-100 transition hover:border-red-300 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
+                        >
+                          {isLoggingOut ? "กำลังออกจากระบบ..." : "ออกจากระบบ"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm text-white/75">
+                        เลือกผู้ใช้เพื่อเข้าสู่แกลเลอรีส่วนตัวของคุณและดูรูปภาพในโฟลเดอร์เฉพาะ
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsSelectorOpen(true)}
+                        className="self-start rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
+                      >
+                        เลือกผู้ใช้
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-[0.35em] text-white/55">
                     Community Gallery
@@ -503,16 +1310,21 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
                       id="file-upload"
                       accept="image/*"
                       onChange={handleUpload}
-                      disabled={isUploading}
+                      disabled={isUploading || !resolvedActiveUser}
                       className="sr-only"
                     />
                     <label
                       htmlFor="file-upload"
                       className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/60 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
-                        isUploading ? "cursor-not-allowed opacity-60" : ""
+                        isUploading || !resolvedActiveUser ? "cursor-not-allowed opacity-60" : ""
                       }`}
+                      aria-disabled={isUploading || !resolvedActiveUser}
                     >
-                      {isUploading ? "กำลังอัปโหลด..." : "เลือกไฟล์เพื่ออัปโหลด"}
+                      {isUploading
+                        ? "กำลังอัปโหลด..."
+                        : resolvedActiveUser
+                          ? "เลือกไฟล์เพื่ออัปโหลด"
+                          : "เลือกผู้ใช้ก่อนอัปโหลด"}
                     </label>
                     <p className="mt-2 text-xs text-white/55">รองรับไฟล์ JPG, PNG และ WEBP</p>
                   </div>
@@ -809,6 +1621,130 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
         </div>
       </main>
 
+      {isResetPinDialogOpen && resolvedActiveUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={handleCloseResetPinDialog}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-xl font-semibold">รีเซ็ต PIN</h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              ตั้งรหัส PIN ใหม่สำหรับ {resolvedActiveUser.displayName} เพื่อใช้เข้าสู่แกลเลอรีส่วนตัว
+            </p>
+
+            {resetPinError && (
+              <div className="mt-4 rounded-xl border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs text-red-100">
+                {resetPinError}
+              </div>
+            )}
+
+            {resetPinSuccess && (
+              <div className="mt-4 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-xs text-emerald-100">
+                {resetPinSuccess}
+              </div>
+            )}
+
+            <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmitResetPin}>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="current-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  รหัส PIN เดิม
+                </label>
+                <input
+                  id="current-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={currentPinValue}
+                  onChange={(event) => setCurrentPinValue(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="กรอกรหัส PIN ปัจจุบัน"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="new-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  รหัส PIN ใหม่
+                </label>
+                <input
+                  id="new-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={newPinValue}
+                  onChange={(event) => setNewPinValue(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="กรอกรหัส 4-10 หลัก"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="confirm-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  ยืนยันรหัส PIN
+                </label>
+                <input
+                  id="confirm-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={confirmPinValue}
+                  onChange={(event) => setConfirmPinValue(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="กรอกรหัส PIN อีกครั้ง"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="pin-hint" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  คำใบ้ PIN (ไม่บังคับ)
+                </label>
+                <input
+                  id="pin-hint"
+                  type="text"
+                  value={pinHintValue}
+                  onChange={(event) => setPinHintValue(event.target.value.slice(0, 120))}
+                  placeholder="เพิ่มคำใบ้ช่วยจำ หรือเว้นว่างเพื่อไม่แสดง"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleCloseResetPinDialog}
+                  disabled={isResettingPin}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(16,185,129,0.35)] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/60"
+                  disabled={
+                    isResettingPin ||
+                    currentPinValue.length < 4 ||
+                    newPinValue.length < 4 ||
+                    confirmPinValue.length < 4
+                  }
+                >
+                  {isResettingPin ? "กำลังบันทึก..." : "บันทึก PIN"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
@@ -893,70 +1829,123 @@ const Home: NextPage<{ images: ImageProps[] }> = ({ images }) => {
 
 export default Home
 
-export async function getServerSideProps() {
-  const results = await cloudinary.search
-    .expression("tags=nextjs-conf")
-    .with_field("context")
-    .sort_by("public_id", "desc")
-    .max_results(400)
-    .execute()
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { req, res } = context
 
-  const publicIds = results.resources.map((result: any) => result.public_id)
+  let users: GalleryUser[] = []
+  let activeUser: GalleryUser | null = null
+  let images: ImageProps[] = []
 
-  const metadataMap = new Map<string, { album?: string; description?: string }>()
+  try {
+    const { default: clientPromise } = await import("../utils/mongodb")
+    const client = await clientPromise
+    const db = client.db(process.env.MONGODB_DB || "img-detail")
+    const userCollection = db.collection("galleryUsers")
 
-  if (process.env.MONGODB_URI && publicIds.length > 0) {
-    try {
-      const { default: clientPromise } = await import("../utils/mongodb")
-      const client = await clientPromise
-      const db = client.db(process.env.MONGODB_DB || "img-detail")
-      const collection = db.collection<{
-        public_id: string
-        album?: string
-        description?: string
-      }>("photoMetadata")
+    const userDocs = await userCollection
+      .find(
+        {},
+        {
+          projection: {
+            displayName: 1,
+            folder: 1,
+            avatarPublicId: 1,
+            pinHint: 1,
+            role: 1,
+          },
+        },
+      )
+      .sort({ displayName: 1 })
+      .toArray()
 
-      const documents = await collection
-        .find({ public_id: { $in: publicIds } })
-        .toArray()
+    users = mapUserDocs(userDocs)
+  } catch (error) {
+    console.error("Failed to load user list", error)
+  }
 
-      documents.forEach((doc) => {
-        metadataMap.set(doc.public_id, {
-          album: doc.album ?? "",
-          description: doc.description ?? "",
-        })
-      })
-    } catch (error) {
-      console.error("Failed to load MongoDB metadata:", error)
+  try {
+    activeUser = await getAuthenticatedUser(req as any)
+    if (!activeUser && req.cookies?.[SESSION_COOKIE_NAME]) {
+      res.setHeader("Set-Cookie", clearSessionCookie())
     }
+  } catch (error) {
+    console.error("Failed to resolve active user", error)
   }
 
-  let reducedResults: ImageProps[] = []
-  let i = 0
-  for (let result of results.resources) {
-    const metadata = metadataMap.get(result.public_id)
-    reducedResults.push({
-      id: i,
-      height: result.height,
-      width: result.width,
-      public_id: result.public_id,
-      format: result.format,
-      album: metadata?.album ?? result?.context?.custom?.album ?? "",
-      description: metadata?.description ?? result?.context?.custom?.description ?? "",
-    })
-    i++
-  }
+  if (activeUser) {
+    try {
+      const sanitizedFolder = activeUser.folder.replace(/"/g, '\\"')
+      const results = await cloudinary.search
+        .expression(`folder="${sanitizedFolder}" AND resource_type:image`)
+        .with_field("context")
+        .sort_by("public_id", "desc")
+        .max_results(400)
+        .execute()
 
-  const blurImagePromises = results.resources.map((image: ImageProps) => getBase64ImageUrl(image))
-  const imagesWithBlurDataUrls = await Promise.all(blurImagePromises)
+      const publicIds = results.resources.map((result: any) => result.public_id)
 
-  for (let i = 0; i < reducedResults.length; i++) {
-    reducedResults[i].blurDataUrl = imagesWithBlurDataUrls[i]
+      const metadataMap = new Map<string, { album?: string; description?: string }>()
+
+      if (process.env.MONGODB_URI && publicIds.length > 0) {
+        try {
+          const { default: clientPromise } = await import("../utils/mongodb")
+          const client = await clientPromise
+          const db = client.db(process.env.MONGODB_DB || "img-detail")
+          const collection = db.collection<{
+            public_id: string
+            album?: string
+            description?: string
+            ownerId?: string
+          }>("photoMetadata")
+
+          const documents = await collection
+            .find({
+              public_id: { $in: publicIds },
+              $or: [{ ownerId: activeUser.id }, { ownerId: { $exists: false } }],
+            })
+            .toArray()
+
+          documents.forEach((doc) => {
+            metadataMap.set(doc.public_id, {
+              album: doc.album ?? "",
+              description: doc.description ?? "",
+            })
+          })
+        } catch (error) {
+          console.error("Failed to load MongoDB metadata:", error)
+        }
+      }
+
+      const reducedResults: ImageProps[] = results.resources.map((result: any, index: number) => {
+        const metadata = metadataMap.get(result.public_id)
+        return {
+          id: index,
+          height: result.height,
+          width: result.width,
+          public_id: result.public_id,
+          format: result.format,
+          album: metadata?.album ?? result?.context?.custom?.album ?? "",
+          description: metadata?.description ?? result?.context?.custom?.description ?? "",
+        }
+      })
+
+      const blurImagePromises = reducedResults.map((image) => getBase64ImageUrl(image))
+      const imagesWithBlurDataUrls = await Promise.all(blurImagePromises)
+
+      images = reducedResults.map((image, index) => ({
+        ...image,
+        blurDataUrl: imagesWithBlurDataUrls[index],
+      }))
+    } catch (error) {
+      console.error("Failed to load images for user", error)
+    }
   }
 
   return {
     props: {
-      images: reducedResults,
+      images,
+      users,
+      activeUser,
     },
   }
 }

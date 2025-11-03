@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import cloudinary from "../../utils/cloudinary"
 import clientPromise from "../../utils/mongodb"
+import { ensureAuthenticatedUser } from "../../utils/session"
 
 const sanitizeContextValue = (value: string) => value.replace(/[|=]/g, "-")
 
@@ -13,10 +14,16 @@ export default async function handler(
   }
 
   try {
+    const user = await ensureAuthenticatedUser(req, res)
+
     const { public_id: publicId, album = "", description = "" } = req.body || {}
 
     if (!publicId || typeof publicId !== "string") {
       return res.status(400).json({ error: "Missing public_id" })
+    }
+
+    if (!publicId.startsWith(`${user.folder}/`)) {
+      return res.status(403).json({ error: "ไม่สามารถแก้ไขข้อมูลของผู้ใช้อื่นได้" })
     }
 
     const albumValue = album.toString().trim()
@@ -40,6 +47,7 @@ export default async function handler(
           public_id: publicId,
           album: albumValue,
           description: descriptionValue,
+          ownerId: user.id,
           updatedAt: new Date(),
         },
       },
@@ -48,9 +56,10 @@ export default async function handler(
 
     return res.status(200).json({ success: true })
   } catch (error: any) {
+    const statusCode = error?.statusCode === 401 ? 401 : 500
     console.error("Update metadata error:", error)
     return res
-      .status(500)
+      .status(statusCode)
       .json({ error: error?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล" })
   }
 }
