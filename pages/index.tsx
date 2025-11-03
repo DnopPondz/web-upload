@@ -43,7 +43,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   >(null)
 
   const [activeUserState, setActiveUserState] = useState<GalleryUser | null>(activeUser)
-  const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(!activeUser)
+  const [isSelectorOpen, setIsSelectorOpen] = useState(!activeUser)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [pinInput, setPinInput] = useState("")
   const [pinError, setPinError] = useState<string | null>(null)
@@ -77,7 +77,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   }, [activeUser])
 
   useEffect(() => {
-    setIsUserSelectorOpen(!activeUser)
+    setIsSelectorOpen(!activeUser)
     if (!activeUser) {
       setSelectedUserId(null)
       setPinInput("")
@@ -92,17 +92,17 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   }, [activeUser])
 
   useEffect(() => {
-    if (!isUserSelectorOpen) {
+    if (!isSelectorOpen) {
       setPinInput("")
       setPinError(null)
     }
-  }, [isUserSelectorOpen])
+  }, [isSelectorOpen])
 
   useEffect(() => {
-    if (isUserSelectorOpen && users.length === 1 && !selectedUserId) {
+    if (isSelectorOpen && users.length === 1 && !selectedUserId) {
       setSelectedUserId(users[0].id)
     }
-  }, [isUserSelectorOpen, users, selectedUserId])
+  }, [isSelectorOpen, users, selectedUserId])
 
   const sizePresets = {
     small: { label: "เล็ก", width: 480, height: 320 },
@@ -265,7 +265,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
         throw new Error(errorData.error || "ไม่สามารถยืนยันตัวตนได้")
       }
 
-      setIsUserSelectorOpen(false)
+      setIsSelectorOpen(false)
       setSelectedUserId(null)
       setPinInput("")
 
@@ -278,10 +278,10 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   }
 
   useEffect(() => {
-    if (selectedUser && isUserSelectorOpen && pinInputRef.current) {
+    if (selectedUser && isSelectorOpen && pinInputRef.current) {
       pinInputRef.current.focus()
     }
-  }, [selectedUser, isUserSelectorOpen])
+  }, [selectedUser, isSelectorOpen])
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -292,7 +292,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
         credentials: "include",
       })
 
-      setIsUserSelectorOpen(true)
+      setIsSelectorOpen(true)
       await router.replace(router.asPath, undefined, { scroll: false })
     } catch (error) {
       console.error("Failed to logout", error)
@@ -691,7 +691,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
         className="relative min-h-screen select-none overflow-hidden bg-[#040507] text-white"
         onClick={handleExitEdit}
       >
-        {isUserSelectorOpen && (
+        {isSelectorOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur-sm">
             <div
               className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
@@ -714,7 +714,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                           {canDismissUserSelector && (
                             <button
                               type="button"
-                              onClick={() => setIsUserSelectorOpen(false)}
+                              onClick={() => setIsSelectorOpen(false)}
                               className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
                             >
                               ปิด
@@ -783,7 +783,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                           {canDismissUserSelector && (
                             <button
                               type="button"
-                              onClick={() => setIsUserSelectorOpen(false)}
+                              onClick={() => setIsSelectorOpen(false)}
                               className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/70 transition hover:border-white/35 hover:text-white"
                             >
                               ปิด
@@ -983,7 +983,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setIsUserSelectorOpen(true)}
+                          onClick={() => setIsSelectorOpen(true)}
                           className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
                         >
                           สลับผู้ใช้
@@ -1005,7 +1005,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                       </p>
                       <button
                         type="button"
-                        onClick={() => setIsUserSelectorOpen(true)}
+                        onClick={() => setIsSelectorOpen(true)}
                         className="self-start rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
                       >
                         เลือกผู้ใช้
