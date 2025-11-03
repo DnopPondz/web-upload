@@ -42,6 +42,13 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     { type: "success" | "error"; message: string } | null
   >(null)
 
+  const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(!activeUser)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [pinInput, setPinInput] = useState("")
+  const [pinError, setPinError] = useState<string | null>(null)
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
   useEffect(() => {
     setImageData(images)
   }, [images])
@@ -160,13 +167,6 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const holdTimer = useRef<NodeJS.Timeout | null>(null)
   const longPressTriggeredRef = useRef(false)
   const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
-
-  const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(!activeUser)
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
-  const [pinInput, setPinInput] = useState("")
-  const [pinError, setPinError] = useState<string | null>(null)
-  const [isVerifyingPin, setIsVerifyingPin] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
   const buildAvatarUrl = (user: GalleryUser, size: number) => {
