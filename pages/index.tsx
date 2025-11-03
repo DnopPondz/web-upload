@@ -42,6 +42,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     { type: "success" | "error"; message: string } | null
   >(null)
 
+  const [activeUserState, setActiveUserState] = useState<GalleryUser | null>(activeUser)
   const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(!activeUser)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [pinInput, setPinInput] = useState("")
@@ -49,10 +50,29 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const [isVerifyingPin, setIsVerifyingPin] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pinInputRef = useRef<HTMLInputElement | null>(null)
+  const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false)
+  const [newPinValue, setNewPinValue] = useState("")
+  const [confirmPinValue, setConfirmPinValue] = useState("")
+  const [pinHintValue, setPinHintValue] = useState(activeUser?.pinHint ?? "")
+  const [resetPinError, setResetPinError] = useState<string | null>(null)
+  const [resetPinSuccess, setResetPinSuccess] = useState<string | null>(null)
+  const [isResettingPin, setIsResettingPin] = useState(false)
 
   useEffect(() => {
     setImageData(images)
   }, [images])
+
+  useEffect(() => {
+    setActiveUserState(activeUser)
+    setPinHintValue(activeUser?.pinHint ?? "")
+    if (!activeUser) {
+      setIsResetPinDialogOpen(false)
+      setNewPinValue("")
+      setConfirmPinValue("")
+      setResetPinError(null)
+      setResetPinSuccess(null)
+    }
+  }, [activeUser])
 
   useEffect(() => {
     setIsUserSelectorOpen(!activeUser)
@@ -179,20 +199,21 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     () => users.find((user) => user.id === selectedUserId) ?? null,
     [users, selectedUserId],
   )
-  const canDismissUserSelector = Boolean(activeUser)
-  const activeUserAvatarUrl = activeUser ? buildAvatarUrl(activeUser, 160) : null
-  const isActiveUserAdmin = activeUser?.role === "admin"
+  const resolvedActiveUser = activeUserState ?? activeUser ?? null
+  const canDismissUserSelector = Boolean(resolvedActiveUser)
+  const activeUserAvatarUrl = resolvedActiveUser ? buildAvatarUrl(resolvedActiveUser, 160) : null
+  const isActiveUserAdmin = resolvedActiveUser?.role === "admin"
   const activeUserInitials = useMemo(() => {
-    if (!activeUser?.displayName) return "?"
+    if (!resolvedActiveUser?.displayName) return "?"
     return (
-      activeUser.displayName
+      resolvedActiveUser.displayName
         .split(" ")
         .filter(Boolean)
         .map((part) => part[0]?.toUpperCase())
         .join("")
         .slice(0, 2) || "?"
     )
-  }, [activeUser])
+  }, [resolvedActiveUser])
 
   const handleSelectUser = (userId: string) => {
     setSelectedUserId(userId)
@@ -275,6 +296,84 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
       console.error("Failed to logout", error)
     } finally {
       setIsLoggingOut(false)
+    }
+  }
+
+  const handleOpenResetPinDialog = () => {
+    if (!resolvedActiveUser) {
+      setResetPinError("กรุณาเลือกผู้ใช้ก่อนรีเซ็ต PIN")
+      return
+    }
+
+    setNewPinValue("")
+    setConfirmPinValue("")
+    setPinHintValue(resolvedActiveUser.pinHint ?? "")
+    setResetPinError(null)
+    setResetPinSuccess(null)
+    setIsResetPinDialogOpen(true)
+  }
+
+  const handleCloseResetPinDialog = () => {
+    if (isResettingPin) return
+    setIsResetPinDialogOpen(false)
+    setNewPinValue("")
+    setConfirmPinValue("")
+    setResetPinError(null)
+    setResetPinSuccess(null)
+  }
+
+  const handleSubmitResetPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (isResettingPin) return
+
+    if (!resolvedActiveUser) {
+      setResetPinError("กรุณาเลือกผู้ใช้ก่อนรีเซ็ต PIN")
+      return
+    }
+
+    if (!/^[0-9]{4,10}$/.test(newPinValue)) {
+      setResetPinError("กรุณากรอกรหัส PIN เป็นตัวเลข 4 ถึง 10 หลัก")
+      return
+    }
+
+    if (newPinValue !== confirmPinValue) {
+      setResetPinError("รหัส PIN และการยืนยันไม่ตรงกัน")
+      return
+    }
+
+    setIsResettingPin(true)
+    setResetPinError(null)
+    setResetPinSuccess(null)
+
+    try {
+      const response = await fetch("/api/users/reset-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          newPin: newPinValue,
+          pinHint: pinHintValue,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "ไม่สามารถรีเซ็ต PIN ได้" }))
+        throw new Error(errorData.error || "ไม่สามารถรีเซ็ต PIN ได้")
+      }
+
+      const data = await response.json()
+      if (data?.user) {
+        setActiveUserState(data.user)
+        setPinHintValue(data.user.pinHint ?? "")
+      }
+
+      setResetPinSuccess("รีเซ็ต PIN เรียบร้อยแล้ว")
+      setNewPinValue("")
+      setConfirmPinValue("")
+    } catch (error: any) {
+      setResetPinError(error?.message || "ไม่สามารถรีเซ็ต PIN ได้")
+    } finally {
+      setIsResettingPin(false)
     }
   }
 
@@ -385,7 +484,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (!activeUser) {
+    if (!resolvedActiveUser) {
       setUploadError("กรุณาเลือกผู้ใช้ก่อนอัปโหลดรูปภาพ")
       event.target.value = ""
       return
@@ -831,14 +930,14 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center">
               <div className="flex flex-col gap-6 text-left">
                 <div className="rounded-2xl border border-white/10 bg-black/40 p-4 shadow-inner shadow-black/20">
-                  {activeUser ? (
+                  {resolvedActiveUser ? (
                     <>
                       <div className="flex flex-wrap items-center gap-4">
                         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40">
                           {activeUserAvatarUrl ? (
                             <Image
                               src={activeUserAvatarUrl}
-                              alt={activeUser.displayName}
+                              alt={resolvedActiveUser.displayName}
                               width={56}
                               height={56}
                               className="h-full w-full object-cover"
@@ -851,8 +950,8 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
                             กำลังดูแกลเลอรีของ
                           </p>
-                          <p className="mt-1 text-lg font-semibold text-white">{activeUser.displayName}</p>
-                          <p className="text-xs text-white/60">โฟลเดอร์: {activeUser.folder}</p>
+                          <p className="mt-1 text-lg font-semibold text-white">{resolvedActiveUser.displayName}</p>
+                          <p className="text-xs text-white/60">โฟลเดอร์: {resolvedActiveUser.folder}</p>
                         </div>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-3">
@@ -864,6 +963,13 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                             สร้างผู้ใช้
                           </Link>
                         )}
+                        <button
+                          type="button"
+                          onClick={handleOpenResetPinDialog}
+                          className="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300 hover:text-emerald-50"
+                        >
+                          รีเซ็ต PIN
+                        </button>
                         <button
                           type="button"
                           onClick={() => setIsUserSelectorOpen(true)}
@@ -943,19 +1049,19 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                       id="file-upload"
                       accept="image/*"
                       onChange={handleUpload}
-                      disabled={isUploading || !activeUser}
+                      disabled={isUploading || !resolvedActiveUser}
                       className="sr-only"
                     />
                     <label
                       htmlFor="file-upload"
                       className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/60 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
-                        isUploading || !activeUser ? "cursor-not-allowed opacity-60" : ""
+                        isUploading || !resolvedActiveUser ? "cursor-not-allowed opacity-60" : ""
                       }`}
-                      aria-disabled={isUploading || !activeUser}
+                      aria-disabled={isUploading || !resolvedActiveUser}
                     >
                       {isUploading
                         ? "กำลังอัปโหลด..."
-                        : activeUser
+                        : resolvedActiveUser
                           ? "เลือกไฟล์เพื่ออัปโหลด"
                           : "เลือกผู้ใช้ก่อนอัปโหลด"}
                     </label>
@@ -1253,6 +1359,107 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
           </section>
         </div>
       </main>
+
+      {isResetPinDialogOpen && resolvedActiveUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={handleCloseResetPinDialog}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-xl font-semibold">รีเซ็ต PIN</h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              ตั้งรหัส PIN ใหม่สำหรับ {resolvedActiveUser.displayName} เพื่อใช้เข้าสู่แกลเลอรีส่วนตัว
+            </p>
+
+            {resetPinError && (
+              <div className="mt-4 rounded-xl border border-red-400/40 bg-red-500/15 px-3 py-2 text-xs text-red-100">
+                {resetPinError}
+              </div>
+            )}
+
+            {resetPinSuccess && (
+              <div className="mt-4 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-xs text-emerald-100">
+                {resetPinSuccess}
+              </div>
+            )}
+
+            <form className="mt-5 flex flex-col gap-4" onSubmit={handleSubmitResetPin}>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="new-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  รหัส PIN ใหม่
+                </label>
+                <input
+                  id="new-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={newPinValue}
+                  onChange={(event) => setNewPinValue(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="กรอกรหัส 4-10 หลัก"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="confirm-pin" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  ยืนยันรหัส PIN
+                </label>
+                <input
+                  id="confirm-pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={confirmPinValue}
+                  onChange={(event) => setConfirmPinValue(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="กรอกรหัส PIN อีกครั้ง"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="pin-hint" className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+                  คำใบ้ PIN (ไม่บังคับ)
+                </label>
+                <input
+                  id="pin-hint"
+                  type="text"
+                  value={pinHintValue}
+                  onChange={(event) => setPinHintValue(event.target.value.slice(0, 120))}
+                  placeholder="เพิ่มคำใบ้ช่วยจำ หรือเว้นว่างเพื่อไม่แสดง"
+                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleCloseResetPinDialog}
+                  disabled={isResettingPin}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(16,185,129,0.35)] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/60"
+                  disabled={isResettingPin || newPinValue.length < 4 || confirmPinValue.length < 4}
+                >
+                  {isResettingPin ? "กำลังบันทึก..." : "บันทึก PIN"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <div

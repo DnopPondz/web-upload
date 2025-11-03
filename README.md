@@ -50,6 +50,9 @@ The gallery now supports per-user folders that are protected with a PIN code.
    `POST /api/users/register` endpoint with `displayName`, `folder`, and `pin` to insert a new user through the API. Optional
    fields include `avatarPublicId` and `pinHint`.
 
+   Signed-in members can update their own credentials through the in-app "รีเซ็ต PIN" dialog, which sends a `POST /api/users/reset-pin`
+   request with a new PIN and optional hint.
+
 2. Upload user photos to Cloudinary folders that match the `folder` field.
 
 3. Define `USER_PIN_SECRET` in `.env.local`; it is used to sign the session cookie after a PIN is verified.
