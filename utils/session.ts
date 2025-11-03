@@ -66,7 +66,7 @@ const serializeCookie = (name: string, value: string, options: CookieOptions = {
   return segments.join("; ")
 }
 
-const mapUserDocument = (doc: any): GalleryUser => ({
+export const mapUserDocument = (doc: any): GalleryUser => ({
   id: doc._id.toString(),
   displayName: doc.displayName,
   folder: doc.folder,

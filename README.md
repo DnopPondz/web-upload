@@ -46,7 +46,9 @@ The gallery now supports per-user folders that are protected with a PIN code.
    }
    ```
 
-   Use the helper exported from `utils/pinHash.ts` to generate the `pinHash` value for a PIN before inserting it.
+   Use the helper exported from `utils/pinHash.ts` to generate the `pinHash` value for a PIN before inserting it, or call the
+   `POST /api/users/register` endpoint with `displayName`, `folder`, and `pin` to insert a new user through the API. Optional
+   fields include `avatarPublicId` and `pinHint`.
 
 2. Upload user photos to Cloudinary folders that match the `folder` field.
 
