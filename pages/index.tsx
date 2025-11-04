@@ -976,7 +976,7 @@ const Home: NextPage<HomeProps> = ({
   return (
     <>
       <Head>
-        <title>Next.js Conf 2022 Photos</title>
+        <title>PicHub</title>
         <meta
           property="og:image"
           content="https://nextjsconf-pics.vercel.app/og-image.png"
