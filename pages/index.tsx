@@ -208,14 +208,15 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
     if (!user) return null
 
     const transformation = `c_fill,g_auto,w=${size},h=${size}`
+
+    if (user.avatarUrl) {
+      return injectCloudinaryTransformation(user.avatarUrl, transformation)
+    }
+
     const preferredCloudName = cloudName ?? resolveCloudinaryCloudName()
 
     if (preferredCloudName && user.avatarPublicId) {
       return `https://res.cloudinary.com/${preferredCloudName}/image/upload/${transformation}/${user.avatarPublicId}`
-    }
-
-    if (user.avatarUrl) {
-      return injectCloudinaryTransformation(user.avatarUrl, transformation)
     }
 
     if (user.avatarPublicId) {
