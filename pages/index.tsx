@@ -1592,12 +1592,14 @@ const Home: NextPage<HomeProps> = ({
                         หมวดหมู่
                       </label>
                       {albumSuggestions.length > 0 && (
-                        <div className="relative">
+                        <div className="group relative">
+                          <span className="pointer-events-none absolute inset-0 rounded-[0.85rem] bg-gradient-to-r from-cyan-400/30 via-white/10 to-fuchsia-500/30 opacity-0 transition duration-300 group-hover:opacity-100 group-focus-within:opacity-100" />
+                          <span className="pointer-events-none absolute inset-[1px] rounded-[0.8rem] border border-white/12 bg-black/60 shadow-[0_18px_45px_rgba(8,8,16,0.55)]" />
                           <select
                             value={resolvedAlbumSelectValue}
                             onChange={handleAlbumSelectChange}
                             disabled={isUploading || !resolvedActiveUser}
-                            className="w-full appearance-none rounded-xl border border-white/15 bg-black/40 px-3 py-2 pr-10 text-sm text-white shadow-inner shadow-black/25 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                            className="relative w-full appearance-none rounded-xl border border-transparent bg-transparent px-4 py-2.5 pr-12 text-sm text-white/90 backdrop-blur transition duration-200 focus:border-white/50 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-white/40"
                           >
                             <option value="">
                               เลือกหมวดหมู่ที่มีอยู่
@@ -1608,7 +1610,7 @@ const Home: NextPage<HomeProps> = ({
                               </option>
                             ))}
                           </select>
-                          <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+                          <ChevronDownIcon className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50 transition group-focus-within:text-white/80 group-hover:text-white/80" />
                         </div>
                       )}
                       <input
