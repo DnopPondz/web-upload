@@ -49,6 +49,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const [albumFilter, setAlbumFilter] = useState<string>("__all__")
   const [editingImageId, setEditingImageId] = useState<number | null>(null)
   const [editAlbum, setEditAlbum] = useState("")
+  const [editImageName, setEditImageName] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [savingImageId, setSavingImageId] = useState<number | null>(null)
   const [metadataStatus, setMetadataStatus] = useState<
@@ -64,6 +65,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pinInputRef = useRef<HTMLInputElement | null>(null)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false)
   const [currentPinValue, setCurrentPinValue] = useState("")
   const [newPinValue, setNewPinValue] = useState("")
@@ -199,6 +201,11 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
 
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null)
+  const [uploadImageName, setUploadImageName] = useState("")
+  const [uploadAlbum, setUploadAlbum] = useState("")
+  const [uploadDescription, setUploadDescription] = useState("")
   const [editMode, setEditMode] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; publicId: string } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -572,56 +579,116 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const { photoId } = router.query
   const currentPhoto = imageData.find((img) => img.id === Number(photoId)) || null
 
-  // --- Upload handler ---
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const resetUploadForm = () => {
+    setSelectedUploadFile(null)
+    setUploadImageName("")
+    setUploadAlbum("")
+    setUploadDescription("")
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = ""
+    }
+  }
+
+  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    setSelectedUploadFile(file)
+    setUploadError(null)
+    setUploadSuccess(null)
+
+    if (file) {
+      const suggestedName = file.name.replace(/\.[^.]+$/, "")
+      setUploadImageName((prev) => (prev.trim().length > 0 ? prev : suggestedName))
+    } else {
+      setUploadImageName("")
+    }
+  }
+
+  const handleClearSelectedFile = () => {
+    resetUploadForm()
+    setUploadError(null)
+    setUploadSuccess(null)
+  }
+
+  const handleUploadSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
 
     if (!resolvedActiveUser) {
       setUploadError("กรุณาเลือกผู้ใช้ก่อนอัปโหลดรูปภาพ")
-      event.target.value = ""
+      return
+    }
+
+    if (!selectedUploadFile) {
+      setUploadError("กรุณาเลือกไฟล์รูปภาพก่อน")
+      return
+    }
+
+    const imageNameValue = uploadImageName.trim()
+    const albumValue = uploadAlbum.trim()
+    const descriptionValue = uploadDescription.trim()
+
+    if (!imageNameValue || !albumValue || !descriptionValue) {
+      setUploadError("กรุณากรอกชื่อรูป หมวดหมู่ และคำอธิบายให้ครบถ้วน")
+      return
+    }
+
+    if (selectedUploadFile.size > 10 * 1024 * 1024) {
+      setUploadError("ไฟล์มีขนาดเกิน 10MB กรุณาเลือกไฟล์ที่เล็กกว่า")
       return
     }
 
     setIsUploading(true)
     setUploadError(null)
+    setUploadSuccess(null)
 
-    const reader = new FileReader()
-    reader.readAsDataURL(file)
+    const readFileAsDataUrl = () =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์ที่เลือกได้"))
+        reader.readAsDataURL(selectedUploadFile)
+      })
 
-    reader.onloadend = async () => {
-      const base64File = reader.result as string
+    try {
+      const base64File = await readFileAsDataUrl()
 
-      try {
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: JSON.stringify({ file: base64File }),
-          headers: { "Content-Type": "application/json" },
-        })
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: JSON.stringify({
+          file: base64File,
+          imageName: imageNameValue,
+          album: albumValue,
+          description: descriptionValue,
+        }),
+        headers: { "Content-Type": "application/json" },
+      })
 
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({ error: "Failed to upload image." }))
-          throw new Error(errorData.error || "Failed to upload image.")
-        }
-
-        const data = await res.json()
-        console.log("Upload successful:", data)
-        router.replace(router.asPath)
-      } catch (error: any) {
-        console.error(error)
-        setUploadError(error.message || "An unknown error occurred.")
-      } finally {
-        setIsUploading(false)
-        event.target.value = ""
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "ไม่สามารถอัปโหลดรูปภาพได้" }))
+        throw new Error(errorData.error || "ไม่สามารถอัปโหลดรูปภาพได้")
       }
-    }
 
-    reader.onerror = (error) => {
-      console.error("Error reading file:", error)
-      setUploadError("Error reading file.")
+      await router.replace(router.asPath)
+      setUploadSuccess(`อัปโหลด "${imageNameValue}" เรียบร้อยแล้ว`)
+      resetUploadForm()
+    } catch (error: any) {
+      console.error(error)
+      setUploadError(error?.message || "เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ")
+    } finally {
       setIsUploading(false)
     }
   }
+
+  useEffect(() => {
+    setSelectedUploadFile(null)
+    setUploadImageName("")
+    setUploadAlbum("")
+    setUploadDescription("")
+    setUploadSuccess(null)
+    setUploadError(null)
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = ""
+    }
+  }, [resolvedActiveUser?.id])
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -764,6 +831,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const handleStartMetadataEdit = (image: ImageProps) => {
     setEditingImageId(image.id)
     setEditAlbum(image.album ?? "")
+    setEditImageName(image.imageName ?? "")
     setEditDescription(image.description ?? "")
     setMetadataStatus(null)
   }
@@ -771,6 +839,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const handleCancelMetadataEdit = () => {
     setEditingImageId(null)
     setEditAlbum("")
+    setEditImageName("")
     setEditDescription("")
   }
 
@@ -781,18 +850,24 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
     event.preventDefault()
 
     const albumValue = editAlbum.trim()
+    const imageNameValue = editImageName.trim()
     const descriptionValue = editDescription.trim()
 
     setSavingImageId(image.id)
     setMetadataStatus(null)
 
     try {
+      if (!imageNameValue) {
+        throw new Error("กรุณากรอกชื่อรูปภาพ")
+      }
+
       const res = await fetch("/api/update-metadata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           public_id: image.public_id,
           album: albumValue,
+          imageName: imageNameValue,
           description: descriptionValue,
         }),
       })
@@ -805,7 +880,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
       setImageData((prev) =>
         prev.map((img) =>
           img.id === image.id
-            ? { ...img, album: albumValue, description: descriptionValue }
+            ? {
+                ...img,
+                album: albumValue,
+                imageName: imageNameValue,
+                description: descriptionValue,
+              }
             : img,
         ),
       )
@@ -816,6 +896,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
       })
       setEditingImageId(null)
       setEditAlbum("")
+      setEditImageName("")
       setEditDescription("")
     } catch (error: any) {
       setMetadataStatus({
@@ -1288,48 +1369,141 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-10">
                   <Bridge />
                 </div>
-                <div className="relative z-10 flex flex-col gap-5 text-left">
-                  <span className="inline-flex w-fit items-center rounded-full border border-white/25 bg-black/40 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 backdrop-blur">
-                    Upload Photo
-                  </span>
-                  <p className="text-sm text-white/75">
-                    เลือกไฟล์ภาพเพื่อเพิ่มลงในแกลเลอรีทันที ระบบจะปรับขนาดให้เหมาะกับการแสดงผลโดยอัตโนมัติ
-                  </p>
-                  <div>
-                    <input
-                      type="file"
-                      id="file-upload"
-                      accept="image/*"
-                      onChange={handleUpload}
-                      disabled={isUploading || !resolvedActiveUser}
-                      className="sr-only"
-                    />
-                    <label
-                      htmlFor="file-upload"
-                      className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-white/20 bg-black/60 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
-                        isUploading || !resolvedActiveUser ? "cursor-not-allowed opacity-60" : ""
-                      }`}
-                      aria-disabled={isUploading || !resolvedActiveUser}
-                    >
-                      {isUploading
-                        ? "กำลังอัปโหลด..."
-                        : resolvedActiveUser
-                          ? "เลือกไฟล์เพื่ออัปโหลด"
-                          : "เลือกผู้ใช้ก่อนอัปโหลด"}
+                <form
+                  className="relative z-10 flex flex-col gap-6 text-left"
+                  onSubmit={handleUploadSubmit}
+                >
+                  <div className="flex flex-col gap-3">
+                    <span className="inline-flex w-fit items-center rounded-full border border-white/25 bg-black/40 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 backdrop-blur">
+                      Upload Photo
+                    </span>
+                    <p className="text-sm leading-relaxed text-white/75">
+                      เติมเรื่องราวให้แกลเลอรีของคุณด้วยการใส่ชื่อรูป หมวดหมู่ และคำอธิบายตั้งแต่อัปโหลดครั้งแรก
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
+                        ชื่อรูปภาพ
+                      </label>
+                      <input
+                        type="text"
+                        value={uploadImageName}
+                        onChange={(event) => setUploadImageName(event.target.value)}
+                        disabled={isUploading || !resolvedActiveUser}
+                        placeholder="เช่น งานเลี้ยงรุ่น 2024"
+                        className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/25 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
+                        หมวดหมู่
+                      </label>
+                      <input
+                        type="text"
+                        value={uploadAlbum}
+                        onChange={(event) => setUploadAlbum(event.target.value)}
+                        disabled={isUploading || !resolvedActiveUser}
+                        placeholder="เช่น สัมมนา, ปาร์ตี้"
+                        className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/25 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
+                      คำอธิบายรูป
                     </label>
-                    <p className="mt-2 text-xs text-white/55">รองรับไฟล์ JPG, PNG และ WEBP</p>
+                    <textarea
+                      value={uploadDescription}
+                      onChange={(event) => setUploadDescription(event.target.value)}
+                      disabled={isUploading || !resolvedActiveUser}
+                      rows={3}
+                      placeholder="เล่าเรื่องราวหรือบอกบริบทของภาพนี้"
+                      className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/25 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/35 p-4 shadow-inner shadow-black/30">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        ref={uploadInputRef}
+                        type="file"
+                        id="file-upload"
+                        accept="image/*"
+                        onChange={handleFileSelection}
+                        disabled={isUploading || !resolvedActiveUser}
+                        className="sr-only"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className={`inline-flex cursor-pointer items-center justify-center rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60 ${
+                          isUploading || !resolvedActiveUser
+                            ? "cursor-not-allowed border-white/10 bg-black/40 text-white/40"
+                            : "bg-black/60 hover:border-white/40 hover:bg-black/70"
+                        }`}
+                        aria-disabled={isUploading || !resolvedActiveUser}
+                      >
+                        {selectedUploadFile ? "เปลี่ยนไฟล์ภาพ" : "เลือกไฟล์ภาพ"}
+                      </label>
+                      {selectedUploadFile && (
+                        <button
+                          type="button"
+                          onClick={handleClearSelectedFile}
+                          className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/40 hover:text-white"
+                          disabled={isUploading}
+                        >
+                          ล้างไฟล์
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-white/60">
+                      {selectedUploadFile ? (
+                        <>
+                          <p>ไฟล์ที่เลือก: {selectedUploadFile.name}</p>
+                          <p>
+                            ขนาดไฟล์: {(selectedUploadFile.size / 1024 / 1024).toFixed(2)} MB (จำกัดไม่เกิน 10MB)
+                          </p>
+                        </>
+                      ) : (
+                        <p>รองรับไฟล์ JPG, PNG และ WEBP ขนาดไม่เกิน 10MB</p>
+                      )}
+                      {resolvedActiveUser ? (
+                        <p className="mt-1 text-white/45">
+                          รูปจะถูกเก็บในโฟลเดอร์ {resolvedActiveUser.folder}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-white/45">เลือกผู้ใช้เพื่อเปิดใช้งานการอัปโหลด</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-white/55">
+                      กรอกข้อมูลให้ครบเพื่อช่วยให้เพื่อนร่วมทีมค้นหารูปได้ง่ายขึ้น
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={isUploading || !resolvedActiveUser}
+                      className="inline-flex items-center justify-center rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(6,182,212,0.35)] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-cyan-500/60"
+                    >
+                      {isUploading ? "กำลังอัปโหลด..." : "อัปโหลดรูป"}
+                    </button>
                   </div>
 
                   {uploadError && (
                     <div className="rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-sm text-red-100 backdrop-blur">
                       <strong className="font-semibold">อัปโหลดไม่สำเร็จ:</strong> {uploadError}
-                      <br />
-                      <span className="text-xs text-red-200">
-                        โปรดตรวจสอบค่า Upload Preset 
-                      </span>
                     </div>
                   )}
-                </div>
+
+                  {uploadSuccess && (
+                    <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm text-emerald-100 backdrop-blur">
+                      {uploadSuccess}
+                    </div>
+                  )}
+                </form>
               </div>
             </div>
           </section>
@@ -1436,7 +1610,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
           <section>
             <div className={containerClass}>
               {filteredImages.map((image) => {
-                const { id, public_id, format, blurDataUrl, album, description } = image
+                const { id, public_id, format, blurDataUrl, album, description, imageName } = image
                 const sizeKey = getSizeForImage(id)
                 const { width, height } = sizePresets[sizeKey]
                 const albumLabel =
@@ -1444,6 +1618,8 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
                     ? fallbackAlbumLabel
                     : (album ?? "").trim()
                 const descriptionText = (description ?? "").trim()
+                const imageTitle = (imageName ?? "").trim()
+                const displayAlbum = albumLabel || "ยังไม่จัดหมวด"
                 const isEditingMetadata = editingImageId === id
                 const isSavingMetadata = savingImageId === id
 
@@ -1497,11 +1673,24 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
                       className="flex flex-col gap-3 border-t border-white/5 bg-black/35 px-5 py-4 text-left"
                       data-editable-card
                     >
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/45">
+                          ชื่อรูป
+                        </p>
+                        <p
+                          className={`mt-2 text-base font-semibold ${
+                            imageTitle ? "text-white" : "text-white/50 italic"
+                          }`}
+                        >
+                          {imageTitle || "ยังไม่ตั้งชื่อ"}
+                        </p>
+                      </div>
+
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
                           กลุ่ม
                         </span>
-                        <span className="text-sm font-medium text-white/80">{albumLabel}</span>
+                        <span className="text-sm font-medium text-white/80">{displayAlbum}</span>
                       </div>
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
@@ -1520,6 +1709,24 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
                               onSubmit={(event) => handleSubmitMetadata(event, image)}
                               data-editable-card
                             >
+                              <div className="flex flex-col gap-1">
+                                <label
+                                  htmlFor={`image-name-${id}`}
+                                  className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45"
+                                >
+                                  ชื่อรูป
+                                </label>
+                                <input
+                                  id={`image-name-${id}`}
+                                  type="text"
+                                  value={editImageName}
+                                  onChange={(event) => setEditImageName(event.target.value)}
+                                  placeholder="ตั้งชื่อเพื่อให้ง่ายต่อการค้นหา"
+                                  className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/20 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60"
+                                  data-editable-card
+                                />
+                              </div>
+
                               <div className="flex flex-col gap-1">
                                 <label
                                   htmlFor={`album-${id}`}
@@ -1891,7 +2098,10 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
       const publicIds = results.resources.map((result: any) => result.public_id)
 
-      const metadataMap = new Map<string, { album?: string; description?: string }>()
+      const metadataMap = new Map<
+        string,
+        { album?: string; description?: string; imageName?: string }
+      >()
 
       if (process.env.MONGODB_URI && publicIds.length > 0) {
         try {
@@ -1902,6 +2112,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
             public_id: string
             album?: string
             description?: string
+            imageName?: string
             ownerId?: string
           }>("photoMetadata")
 
@@ -1916,6 +2127,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
             metadataMap.set(doc.public_id, {
               album: doc.album ?? "",
               description: doc.description ?? "",
+              imageName: doc.imageName ?? "",
             })
           })
         } catch (error) {
@@ -1933,6 +2145,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
           format: result.format,
           album: metadata?.album ?? result?.context?.custom?.album ?? "",
           description: metadata?.description ?? result?.context?.custom?.description ?? "",
+          imageName: metadata?.imageName ?? result?.context?.custom?.imageName ?? "",
         }
       })
 

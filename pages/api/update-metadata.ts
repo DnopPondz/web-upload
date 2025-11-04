@@ -1,9 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import cloudinary from "../../utils/cloudinary"
 import clientPromise from "../../utils/mongodb"
+import { buildCloudinaryContextString } from "../../utils/photoMetadata"
 import { ensureAuthenticatedUser } from "../../utils/session"
-
-const sanitizeContextValue = (value: string) => value.replace(/[|=]/g, "-")
 
 export default async function handler(
   req: NextApiRequest,
@@ -16,7 +15,12 @@ export default async function handler(
   try {
     const user = await ensureAuthenticatedUser(req, res)
 
-    const { public_id: publicId, album = "", description = "" } = req.body || {}
+    const {
+      public_id: publicId,
+      album = "",
+      description = "",
+      imageName = "",
+    } = req.body || {}
 
     if (!publicId || typeof publicId !== "string") {
       return res.status(400).json({ error: "Missing public_id" })
@@ -26,15 +30,15 @@ export default async function handler(
       return res.status(403).json({ error: "ไม่สามารถแก้ไขข้อมูลของผู้ใช้อื่นได้" })
     }
 
-    const albumValue = album.toString().trim()
-    const descriptionValue = description.toString().trim()
+    const { contextString, trimmedValues } = buildCloudinaryContextString({
+      album,
+      description,
+      imageName,
+    })
 
-    const safeAlbum = sanitizeContextValue(albumValue)
-    const safeDescription = sanitizeContextValue(descriptionValue)
-
-    const contextParts = [`album=${safeAlbum}`, `description=${safeDescription}`]
-
-    await cloudinary.uploader.add_context(contextParts.join("|"), [publicId])
+    if (contextString) {
+      await cloudinary.uploader.add_context(contextString, [publicId])
+    }
 
     const client = await clientPromise
     const db = client.db(process.env.MONGODB_DB || "img-detail")
@@ -45,8 +49,9 @@ export default async function handler(
       {
         $set: {
           public_id: publicId,
-          album: albumValue,
-          description: descriptionValue,
+          album: trimmedValues.album ?? "",
+          description: trimmedValues.description ?? "",
+          imageName: trimmedValues.imageName ?? "",
           ownerId: user.id,
           updatedAt: new Date(),
         },

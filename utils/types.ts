@@ -8,6 +8,7 @@ export interface ImageProps {
   blurDataUrl?: string;
   album?: string;
   description?: string;
+  imageName?: string;
 }
 
 export type GalleryUserRole = "admin" | "member";
