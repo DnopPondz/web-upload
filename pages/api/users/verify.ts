@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { ObjectId } from "mongodb"
 import clientPromise from "../../../utils/mongodb"
 import { verifyPinHash } from "../../../utils/pinHash"
-import { buildCloudinaryImageUrl } from "../../../utils/cloudinaryHelpers"
+import { buildCloudinaryImageUrl, normalizeAvatarPublicId } from "../../../utils/cloudinaryHelpers"
 import { createSessionCookie } from "../../../utils/session"
 
 export default async function handler(
@@ -46,10 +46,7 @@ export default async function handler(
 
     res.setHeader("Set-Cookie", createSessionCookie(userDoc._id.toString()))
 
-    const avatarPublicId =
-      typeof userDoc.avatarPublicId === "string" && userDoc.avatarPublicId.trim()
-        ? userDoc.avatarPublicId.trim()
-        : undefined
+    const avatarPublicId = normalizeAvatarPublicId(userDoc.avatarPublicId)
     const rawAvatarUrl =
       typeof userDoc.avatarUrl === "string" && userDoc.avatarUrl.trim()
         ? userDoc.avatarUrl.trim()

@@ -5,13 +5,48 @@ export const resolveCloudinaryCloudName = (): string | undefined => {
   return trimmed ? trimmed : undefined
 }
 
-export const buildCloudinaryImageUrl = (publicId?: string | null): string | undefined => {
-  const trimmedId = typeof publicId === "string" ? publicId.trim() : ""
-  const cloudName = resolveCloudinaryCloudName()
-  if (!cloudName || !trimmedId) {
+export const resolveCloudinaryAvatarFolder = (): string => {
+  const folder =
+    process.env.CLOUDINARY_AVATAR_FOLDER ||
+    process.env.NEXT_PUBLIC_CLOUDINARY_AVATAR_FOLDER ||
+    ""
+  const trimmed = folder.trim()
+  return trimmed || "useravatar"
+}
+
+export const normalizeAvatarPublicId = (
+  publicId?: string | null,
+): string | undefined => {
+  const trimmed = typeof publicId === "string" ? publicId.trim() : ""
+  if (!trimmed) {
     return undefined
   }
-  return `https://res.cloudinary.com/${cloudName}/image/upload/${trimmedId}`
+
+  const folder = resolveCloudinaryAvatarFolder()
+  if (!folder) {
+    return trimmed
+  }
+
+  const segments = trimmed.split("/")
+  if (segments.length === 1) {
+    return `${folder}/${segments[0]}`
+  }
+
+  const [firstSegment, ...rest] = segments
+  if (firstSegment.toLowerCase() === folder.toLowerCase()) {
+    return [folder, ...rest].join("/")
+  }
+
+  return trimmed
+}
+
+export const buildCloudinaryImageUrl = (publicId?: string | null): string | undefined => {
+  const normalizedId = normalizeAvatarPublicId(publicId)
+  const cloudName = resolveCloudinaryCloudName()
+  if (!cloudName || !normalizedId) {
+    return undefined
+  }
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${normalizedId}`
 }
 
 const hasTransformationPrefix = (segment: string) => {

@@ -2,7 +2,11 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { ObjectId } from "mongodb"
 import cloudinary from "../../../utils/cloudinary"
 import clientPromise from "../../../utils/mongodb"
-import { buildCloudinaryImageUrl } from "../../../utils/cloudinaryHelpers"
+import {
+  buildCloudinaryImageUrl,
+  normalizeAvatarPublicId,
+  resolveCloudinaryAvatarFolder,
+} from "../../../utils/cloudinaryHelpers"
 import { ensureAuthenticatedUser, mapUserDocument } from "../../../utils/session"
 
 export const config = {
@@ -13,7 +17,7 @@ export const config = {
   },
 }
 
-const AVATAR_FOLDER = process.env.CLOUDINARY_AVATAR_FOLDER || "userAvatar"
+const AVATAR_FOLDER = resolveCloudinaryAvatarFolder()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -47,14 +51,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const collection = db.collection("galleryUsers")
     const userId = new ObjectId(user.id)
 
+    const normalizedPublicId =
+      normalizeAvatarPublicId(uploadResponse.public_id) || uploadResponse.public_id
     const resolvedAvatarUrl =
-      uploadResponse.secure_url || buildCloudinaryImageUrl(uploadResponse.public_id)
+      uploadResponse.secure_url || buildCloudinaryImageUrl(normalizedPublicId)
 
     await collection.updateOne(
       { _id: userId },
       {
         $set: {
-          avatarPublicId: uploadResponse.public_id,
+          avatarPublicId: normalizedPublicId,
           avatarUrl: resolvedAvatarUrl,
           updatedAt: new Date(),
         },
@@ -64,9 +70,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const updatedUserDoc = await collection.findOne({ _id: userId })
     const updatedUser = updatedUserDoc ? mapUserDocument(updatedUserDoc) : null
 
-    if (user.avatarPublicId && user.avatarPublicId !== uploadResponse.public_id) {
+    const previousPublicId = normalizeAvatarPublicId(user.avatarPublicId)
+
+    if (previousPublicId && previousPublicId !== normalizedPublicId) {
       try {
-        await cloudinary.uploader.destroy(user.avatarPublicId)
+        await cloudinary.uploader.destroy(previousPublicId)
       } catch (destroyError) {
         console.warn("Failed to remove previous avatar", destroyError)
       }
@@ -74,11 +82,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       success: true,
-      avatarPublicId: uploadResponse.public_id,
+      avatarPublicId: normalizedPublicId,
       avatarUrl: resolvedAvatarUrl,
       user: updatedUser ?? {
         ...user,
-        avatarPublicId: uploadResponse.public_id,
+        avatarPublicId: normalizedPublicId ?? undefined,
         avatarUrl: resolvedAvatarUrl ?? undefined,
       },
     })

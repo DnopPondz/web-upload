@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import clientPromise from "../../../utils/mongodb"
 import { createPinHash } from "../../../utils/pinHash"
-import { buildCloudinaryImageUrl } from "../../../utils/cloudinaryHelpers"
+import { buildCloudinaryImageUrl, normalizeAvatarPublicId } from "../../../utils/cloudinaryHelpers"
 import { mapUserDocument } from "../../../utils/session"
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -48,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const normalizedFolder = folder.trim()
     const normalizedName = displayName.trim()
-    const normalizedAvatarPublicId = avatarPublicId?.trim() || undefined
+    const normalizedAvatarPublicId = normalizeAvatarPublicId(avatarPublicId)
     const normalizedAvatarUrl = buildCloudinaryImageUrl(normalizedAvatarPublicId)
 
     const existingUser = await collection.findOne({

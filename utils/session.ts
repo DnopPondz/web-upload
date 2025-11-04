@@ -6,6 +6,7 @@ import type { GalleryUser, GalleryUserRole } from "./types"
 import {
   buildCloudinaryImageUrl,
   extractPublicIdFromUrl,
+  normalizeAvatarPublicId,
 } from "./cloudinaryHelpers"
 
 const SESSION_COOKIE_NAME = "galleryAuth"
@@ -82,8 +83,9 @@ const normalizeString = (value: any) => {
 export const mapUserDocument = (doc: any): GalleryUser => {
   const rawAvatarUrl = normalizeString(doc.avatarUrl)
   const rawAvatarPublicId = normalizeString(doc.avatarPublicId)
-
-  const derivedPublicId = rawAvatarPublicId || extractPublicIdFromUrl(rawAvatarUrl)
+  const derivedPublicId =
+    normalizeAvatarPublicId(rawAvatarPublicId) ||
+    normalizeAvatarPublicId(extractPublicIdFromUrl(rawAvatarUrl))
   const resolvedAvatarUrl = rawAvatarUrl || buildCloudinaryImageUrl(derivedPublicId)
 
   return {

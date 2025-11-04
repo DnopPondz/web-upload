@@ -21,6 +21,7 @@ import cloudinary from "../utils/cloudinary"
 import {
   buildCloudinaryImageUrl,
   injectCloudinaryTransformation,
+  normalizeAvatarPublicId,
   resolveCloudinaryCloudName,
 } from "../utils/cloudinaryHelpers"
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder"
@@ -36,6 +37,10 @@ type HomeProps = {
 }
 
 const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => {
+  const avatarFolderName =
+    process.env.NEXT_PUBLIC_CLOUDINARY_AVATAR_FOLDER ??
+    process.env.CLOUDINARY_AVATAR_FOLDER ??
+    "useravatar"
   const router = useRouter()
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
 
@@ -214,13 +219,14 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
     }
 
     const preferredCloudName = cloudName ?? resolveCloudinaryCloudName()
+    const normalizedPublicId = normalizeAvatarPublicId(user.avatarPublicId)
 
-    if (preferredCloudName && user.avatarPublicId) {
-      return `https://res.cloudinary.com/${preferredCloudName}/image/upload/${transformation}/${user.avatarPublicId}`
+    if (preferredCloudName && normalizedPublicId) {
+      return `https://res.cloudinary.com/${preferredCloudName}/image/upload/${transformation}/${normalizedPublicId}`
     }
 
-    if (user.avatarPublicId) {
-      const fallbackUrl = buildCloudinaryImageUrl(user.avatarPublicId)
+    if (normalizedPublicId) {
+      const fallbackUrl = buildCloudinaryImageUrl(normalizedPublicId)
       if (fallbackUrl) {
         return injectCloudinaryTransformation(fallbackUrl, transformation)
       }
@@ -1111,7 +1117,9 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
 
               <div className="flex flex-col items-center gap-3 text-center text-xs text-white/60">
                 <p>รองรับไฟล์ภาพสกุล JPG, PNG และ WEBP ขนาดไม่เกิน 10MB</p>
-                <p className="text-white/40">รูปใหม่จะถูกบันทึกไปยัง Cloudinary โฟลเดอร์ userAvatar</p>
+                <p className="text-white/40">
+                  รูปใหม่จะถูกบันทึกไปยัง Cloudinary โฟลเดอร์ {avatarFolderName}
+                </p>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
