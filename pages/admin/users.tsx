@@ -350,62 +350,78 @@ const AdminUsersPage: NextPage<AdminUsersPageProps> = ({ activeUser, users: init
                 </p>
               )}
 
-              <div className="mt-6 hidden md:block">
-                <div className="overflow-hidden rounded-3xl border border-white/8 bg-black/30 backdrop-blur">
-                  <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,0.9fr)] items-center gap-3 border-b border-white/10 bg-white/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
-                    <span>ชื่อ</span>
-                    <span>โฟลเดอร์</span>
-                    <span>สิทธิ์</span>
-                    <span>คำใบ้รหัส</span>
-                    <span className="text-right">จัดการ</span>
-                  </div>
-                  <div className="divide-y divide-white/8">
-                    {users.map((user) => (
-                      <div
-                        key={user.id}
-                        className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,0.9fr)] items-center gap-3 bg-black/35 px-6 py-4 text-sm transition hover:bg-white/[0.07]"
-                      >
-                        <div className="truncate font-medium text-white" title={user.displayName}>
-                          {user.displayName}
-                        </div>
-                        <div className="truncate text-white/70" title={user.folder}>
-                          {user.folder}
-                        </div>
-                        <div>
-                          <span className="inline-flex items-center rounded-full border border-white/15 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">
-                            {user.role === "admin" ? "Admin" : "Member"}
-                          </span>
-                        </div>
-                        <div className="truncate text-white/50" title={user.pinHint || "-"}>
-                          {user.pinHint || "-"}
-                        </div>
-                        <div className="flex items-center justify-end gap-2 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => openEditDialog(user)}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 font-semibold text-white/80 transition hover:border-sky-400/60 hover:text-sky-100"
-                          >
-                            <PencilSquareIcon className="h-4 w-4" aria-hidden="true" />
-                            แก้ไข
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteUser(user)}
-                            disabled={isDeletingUserId === user.id}
-                            className="inline-flex items-center gap-2 rounded-full border border-red-400/40 px-3 py-1.5 font-semibold text-red-200 transition hover:border-red-300/60 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
-                          >
-                            <TrashIcon className="h-4 w-4" aria-hidden="true" />
-                            {isDeletingUserId === user.id ? "กำลังลบ..." : "ลบ"}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {users.length === 0 && (
-                      <div className="px-6 py-8 text-center text-sm text-white/60">ยังไม่มีผู้ใช้ในระบบ</div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <div className="mt-8 hidden md:block">
+  <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/25 backdrop-blur-lg shadow-lg">
+    {/* Table Header */}
+    <div className="grid grid-cols-[1.4fr_1.2fr_0.9fr_1.4fr_1fr] items-center gap-3 border-b border-white/10 bg-white/5 px-8 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
+      <span>ชื่อ</span>
+      <span>โฟลเดอร์</span>
+      <span>สิทธิ์</span>
+      <span className="text-right col-span-2">จัดการ</span>
+    </div>
+
+    {/* Table Rows */}
+    <div className="divide-y divide-white/10">
+      {users.length > 0 ? (
+        users.map((user) => (
+          <div
+            key={user.id}
+            className="grid grid-cols-[1.4fr_1.2fr_0.9fr_1.4fr_1fr] items-center gap-3 bg-white/5 px-8 py-4 text-sm text-white transition hover:bg-white/[0.08]"
+          >
+            {/* Name */}
+            <div className="truncate font-medium" title={user.displayName}>
+              {user.displayName}
+            </div>
+
+            {/* Folder */}
+            <div className="truncate text-white/70" title={user.folder}>
+              {user.folder || "-"}
+            </div>
+
+            {/* Role Badge */}
+            <div>
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.22em] ${
+                  user.role === "admin"
+                    ? "border-amber-400/40 text-amber-200"
+                    : "border-white/20 text-white/70"
+                }`}
+              >
+                {user.role === "admin" ? "Admin" : "Member"}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="col-span-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => openEditDialog(user)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:border-sky-400/60 hover:text-sky-100"
+              >
+                <PencilSquareIcon className="h-4 w-4" />
+                แก้ไข
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteUser(user)}
+                disabled={isDeletingUserId === user.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-red-400/40 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:border-red-300/60 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
+              >
+                <TrashIcon className="h-4 w-4" />
+                {isDeletingUserId === user.id ? "กำลังลบ..." : "ลบ"}
+              </button>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="px-8 py-10 text-center text-sm text-white/60">
+          ยังไม่มีผู้ใช้ในระบบ
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
 
               <div className="mt-6 grid gap-4 md:hidden">
                 {users.map((user) => (
@@ -467,135 +483,171 @@ const AdminUsersPage: NextPage<AdminUsersPageProps> = ({ activeUser, users: init
 
       {isEditDialogOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10">
-          <div className="relative w-full max-w-xl max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0b0b0f] p-6 shadow-[0_25px_60px_rgba(0,0,0,0.6)] sm:p-8">
-            <button
-              type="button"
-              onClick={closeEditDialog}
-              className="absolute right-6 top-6 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 transition hover:border-white/30 hover:text-white"
-            >
-              <span className="sr-only">ปิดหน้าต่างแก้ไข</span>
-              <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-            </button>
+  <div className="relative w-full max-w-xl max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-gradient-to-b from-[#101015] to-[#0b0b0f] p-6 shadow-[0_25px_60px_rgba(0,0,0,0.6)] sm:p-8">
+    {/* Close button */}
+    <button
+      type="button"
+      onClick={closeEditDialog}
+      className="absolute right-6 top-6 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/60 transition hover:border-white/30 hover:text-white"
+    >
+      <span className="sr-only">ปิดหน้าต่างแก้ไข</span>
+      <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+    </button>
 
-            <h3 className="text-xl font-semibold text-white">แก้ไขข้อมูลผู้ใช้</h3>
-            <p className="mt-2 text-sm text-white/60">
-              ปรับปรุงข้อมูลของ {editingUser.displayName} โดยสามารถแก้ไขชื่อ โฟลเดอร์ สิทธิ์ และรีเซ็ตรหัส PIN ได้จากที่นี่
-            </p>
+    {/* Header */}
+    <div className="mb-6">
+      <h3 className="text-2xl font-semibold text-white tracking-wide">แก้ไขข้อมูลผู้ใช้</h3>
+      <p className="mt-2 text-sm text-white/60 leading-relaxed">
+        ปรับปรุงข้อมูลของ{" "}
+        <span className="font-medium text-white">{editingUser.displayName}</span> ได้จากที่นี่
+        (ชื่อ, โฟลเดอร์, สิทธิ์ และรหัส PIN)
+      </p>
+    </div>
 
-            <form className="mt-6 space-y-4" onSubmit={handleUpdateUser}>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50" htmlFor="editDisplayName">
-                  ชื่อที่แสดง
-                </label>
-                <input
-                  id="editDisplayName"
-                  type="text"
-                  value={editDisplayName}
-                  onChange={(event) => setEditDisplayName(event.target.value)}
-                  required
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none focus:ring-0"
-                />
-              </div>
+    {/* Form */}
+    <form className="space-y-6" onSubmit={handleUpdateUser}>
+      {/* Name */}
+      <div>
+        <label
+          htmlFor="editDisplayName"
+          className="block text-xs font-semibold uppercase tracking-[0.25em] text-white/50"
+        >
+          ชื่อที่แสดง
+        </label>
+        <input
+          id="editDisplayName"
+          type="text"
+          value={editDisplayName}
+          onChange={(e) => setEditDisplayName(e.target.value)}
+          required
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
+        />
+      </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50" htmlFor="editFolder">
-                  โฟลเดอร์ใน Cloudinary
-                </label>
-                <input
-                  id="editFolder"
-                  type="text"
-                  value={editFolder}
-                  onChange={(event) => setEditFolder(event.target.value)}
-                  required
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none focus:ring-0"
-                />
-              </div>
+      {/* Folder */}
+      <div>
+        <label
+          htmlFor="editFolder"
+          className="block text-xs font-semibold uppercase tracking-[0.25em] text-white/50"
+        >
+          โฟลเดอร์ใน Cloudinary
+        </label>
+        <input
+          id="editFolder"
+          type="text"
+          value={editFolder}
+          onChange={(e) => setEditFolder(e.target.value)}
+          required
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
+        />
+      </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50" htmlFor="editRole">
-                  สิทธิ์ของผู้ใช้
-                </label>
-                <select
-                  id="editRole"
-                  value={editRole}
-                  onChange={(event) => setEditRole(event.target.value as GalleryUser["role"])}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-sky-400 focus:outline-none focus:ring-0"
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
+      {/* Role */}
+      <div>
+        <label
+          htmlFor="editRole"
+          className="block text-xs font-semibold uppercase tracking-[0.25em] text-white/50"
+        >
+          สิทธิ์ของผู้ใช้
+        </label>
+        <select
+          id="editRole"
+          value={editRole}
+          onChange={(e) => setEditRole(e.target.value as GalleryUser["role"])}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white focus:border-sky-400 focus:outline-none"
+        >
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50" htmlFor="editPin">
-                  รหัส PIN ใหม่ (ตัวเลข 4-10 หลัก)
-                </label>
-                <input
-                  id="editPin"
-                  type="password"
-                  inputMode="numeric"
-                  value={editPin}
-                  onChange={(event) => setEditPin(event.target.value)}
-                  minLength={4}
-                  maxLength={10}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none focus:ring-0"
-                  placeholder="ปล่อยว่างหากไม่ต้องการเปลี่ยน"
-                />
-                <p className="mt-1 text-xs text-white/40">หากปล่อยว่าง ระบบจะคงรหัส PIN เดิมไว้</p>
-              </div>
+      {/* PIN */}
+      <div>
+        <label
+          htmlFor="editPin"
+          className="block text-xs font-semibold uppercase tracking-[0.25em] text-white/50"
+        >
+          รหัส PIN ใหม่ (ตัวเลข 4-10 หลัก)
+        </label>
+        <input
+          id="editPin"
+          type="password"
+          inputMode="numeric"
+          value={editPin}
+          onChange={(e) => setEditPin(e.target.value)}
+          minLength={4}
+          maxLength={10}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
+          placeholder="ปล่อยว่างหากไม่ต้องการเปลี่ยน"
+        />
+        <p className="mt-1 text-xs text-white/40">หากปล่อยว่าง ระบบจะคงรหัส PIN เดิมไว้</p>
+      </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50" htmlFor="editPinHint">
-                  คำใบ้รหัส
-                </label>
-                <input
-                  id="editPinHint"
-                  type="text"
-                  value={editPinHint}
-                  onChange={(event) => setEditPinHint(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none focus:ring-0"
-                  placeholder="คำใบ้ที่จะช่วยจำ PIN"
-                />
-              </div>
+      {/* Pin hint */}
+      <div>
+        <label
+          htmlFor="editPinHint"
+          className="block text-xs font-semibold uppercase tracking-[0.25em] text-white/50"
+        >
+          คำใบ้รหัส
+        </label>
+        <input
+          id="editPinHint"
+          type="text"
+          value={editPinHint}
+          onChange={(e) => setEditPinHint(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
+          placeholder="คำใบ้ที่จะช่วยจำ PIN"
+        />
+      </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50" htmlFor="editAvatar">
-                  รูปโปรไฟล์ (Cloudinary public ID)
-                </label>
-                <input
-                  id="editAvatar"
-                  type="text"
-                  value={editAvatarPublicId}
-                  onChange={(event) => setEditAvatarPublicId(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none focus:ring-0"
-                  placeholder="เช่น user/avatar"
-                />
-                <p className="mt-1 text-xs text-white/40">ปล่อยว่างเพื่อล้างรูปโปรไฟล์</p>
-              </div>
+      {/* Avatar */}
+      {/* <div>
+        <label
+          htmlFor="editAvatar"
+          className="block text-xs font-semibold uppercase tracking-[0.25em] text-white/50"
+        >
+          รูปโปรไฟล์ (Cloudinary public ID)
+        </label>
+        <input
+          id="editAvatar"
+          type="text"
+          value={editAvatarPublicId}
+          onChange={(e) => setEditAvatarPublicId(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:border-sky-400 focus:outline-none"
+          placeholder="เช่น user/avatar"
+        />
+        <p className="mt-1 text-xs text-white/40">ปล่อยว่างเพื่อล้างรูปโปรไฟล์</p>
+      </div> */}
 
-              {editError && (
-                <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-100">{editError}</p>
-              )}
+      {/* Error message */}
+      {editError && (
+        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+          {editError}
+        </p>
+      )}
 
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={closeEditDialog}
-                  className="inline-flex items-center justify-center rounded-full border border-white/15 px-5 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdatingUser}
-                  className="inline-flex items-center justify-center rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-2 text-sm font-semibold text-sky-100 transition hover:border-sky-300 hover:text-sky-50 disabled:cursor-not-allowed disabled:border-sky-400/30 disabled:text-sky-200/60"
-                >
-                  {isUpdatingUser ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* Buttons */}
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10 mt-4">
+        <button
+          type="button"
+          onClick={closeEditDialog}
+          className="inline-flex items-center justify-center rounded-full border border-white/15 px-5 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
+        >
+          ยกเลิก
+        </button>
+        <button
+          type="submit"
+          disabled={isUpdatingUser}
+          className="inline-flex items-center justify-center rounded-full border border-sky-400/60 bg-sky-500/10 px-5 py-2 text-sm font-semibold text-sky-100 transition hover:border-sky-300 hover:text-sky-50 disabled:cursor-not-allowed disabled:border-sky-400/30 disabled:text-sky-200/60"
+        >
+          {isUpdatingUser ? "กำลังบันทึก..." : "บันทึกการเปลี่ยนแปลง"}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
       )}
     </>
   )
