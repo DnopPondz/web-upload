@@ -88,7 +88,7 @@ export default function Modal({
       open={true}
       onClose={handleClose}
       initialFocus={overlayRef}
-      className="fixed inset-0 z-10 flex items-center justify-center"
+      className="fixed inset-0 z-10 flex items-center justify-center px-4 py-8 sm:px-6 md:px-10"
     >
       <Dialog.Overlay
         ref={overlayRef}
