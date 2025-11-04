@@ -7,10 +7,8 @@ interface AvatarImageProps {
   size: number
   className?: string
   priority?: boolean
-  fallbackSrc?: string
+  fallbackSrc?: string | null
 }
-
-const DEFAULT_FALLBACK = "/user.png"
 
 const AvatarImage = ({
   src,
@@ -18,15 +16,30 @@ const AvatarImage = ({
   size,
   className,
   priority = false,
-  fallbackSrc = DEFAULT_FALLBACK,
+  fallbackSrc = null,
 }: AvatarImageProps) => {
   const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
     setHasError(false)
-  }, [src])
+  }, [src, fallbackSrc])
 
-  const displaySrc = !src || hasError ? fallbackSrc : src
+  const displaySrc = !src || hasError ? fallbackSrc ?? null : src
+
+  if (!displaySrc) {
+    const placeholderInitial = alt?.trim().charAt(0)?.toUpperCase() ?? ""
+    const placeholderClassName =
+      className ??
+      "flex items-center justify-center rounded-full bg-white/10 text-sm font-semibold uppercase text-white/60"
+
+    const placeholderStyle = className ? undefined : { width: size, height: size }
+
+    return (
+      <div role="img" aria-label={alt} className={placeholderClassName} style={placeholderStyle}>
+        {placeholderInitial}
+      </div>
+    )
+  }
 
   return (
     <Image
@@ -36,7 +49,13 @@ const AvatarImage = ({
       height={size}
       className={className}
       priority={priority}
-      onError={src && !hasError ? () => setHasError(true) : undefined}
+      onError={
+        src && !hasError
+          ? () => {
+              setHasError(true)
+            }
+          : undefined
+      }
     />
   )
 }
