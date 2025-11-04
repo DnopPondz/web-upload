@@ -210,7 +210,7 @@ const AdminUsersPage: NextPage<AdminUsersPageProps> = ({ activeUser, users: init
                 สร้างผู้ใช้ใหม่และตรวจสอบสิทธิ์การเข้าถึงสำหรับแกลเลอรี
               </p>
             </div>
-            <div className="flex flex-col items-end text-right text-sm text-white/60">
+            <div className="flex flex-col items-start text-left text-sm text-white/60 sm:items-end sm:text-right">
               <span className="font-semibold text-white/80">{activeUser.displayName}</span>
               <span className="text-xs uppercase tracking-[0.25em] text-sky-300">Admin</span>
               <Link
@@ -350,8 +350,9 @@ const AdminUsersPage: NextPage<AdminUsersPageProps> = ({ activeUser, users: init
                 </p>
               )}
 
-              <div className="mt-6 overflow-hidden rounded-2xl border border-white/5">
-                <table className="min-w-full divide-y divide-white/10 text-left text-sm">
+              <div className="mt-6 hidden rounded-2xl border border-white/5 md:block">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-white/10 text-left text-sm">
                   <thead className="bg-white/5 text-xs uppercase tracking-[0.25em] text-white/50">
                     <tr>
                       <th className="px-4 py-3">ชื่อ</th>
@@ -361,49 +362,104 @@ const AdminUsersPage: NextPage<AdminUsersPageProps> = ({ activeUser, users: init
                       <th className="px-4 py-3 text-right">จัดการ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5 bg-black/40">
-                    {users.map((user) => (
-                      <tr key={user.id} className="hover:bg-white/[0.08]">
-                        <td className="px-4 py-3 font-medium text-white">{user.displayName}</td>
-                        <td className="px-4 py-3 text-white/70">{user.folder}</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center rounded-full border border-white/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
-                            {user.role === "admin" ? "Admin" : "Member"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-white/50">{user.pinHint || "-"}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2 text-xs">
-                            <button
-                              type="button"
-                              onClick={() => openEditDialog(user)}
-                              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 font-semibold text-white/80 transition hover:border-sky-400/60 hover:text-sky-100"
-                            >
-                              <PencilSquareIcon className="h-4 w-4" aria-hidden="true" />
-                              แก้ไข
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUser(user)}
-                              disabled={isDeletingUserId === user.id}
-                              className="inline-flex items-center gap-2 rounded-full border border-red-400/40 px-3 py-1.5 font-semibold text-red-200 transition hover:border-red-300/60 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
-                            >
-                              <TrashIcon className="h-4 w-4" aria-hidden="true" />
-                              {isDeletingUserId === user.id ? "กำลังลบ..." : "ลบ"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {users.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-white/60">
-                          ยังไม่มีผู้ใช้ในระบบ
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                    <tbody className="divide-y divide-white/5 bg-black/40">
+                      {users.map((user) => (
+                        <tr key={user.id} className="hover:bg-white/[0.08]">
+                          <td className="px-4 py-3 font-medium text-white">{user.displayName}</td>
+                          <td className="px-4 py-3 text-white/70">{user.folder}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center rounded-full border border-white/15 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                              {user.role === "admin" ? "Admin" : "Member"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-white/50">{user.pinHint || "-"}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => openEditDialog(user)}
+                                className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 font-semibold text-white/80 transition hover:border-sky-400/60 hover:text-sky-100"
+                              >
+                                <PencilSquareIcon className="h-4 w-4" aria-hidden="true" />
+                                แก้ไข
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={isDeletingUserId === user.id}
+                                className="inline-flex items-center gap-2 rounded-full border border-red-400/40 px-3 py-1.5 font-semibold text-red-200 transition hover:border-red-300/60 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
+                              >
+                                <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                                {isDeletingUserId === user.id ? "กำลังลบ..." : "ลบ"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {users.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-6 text-center text-white/60">
+                            ยังไม่มีผู้ใช้ในระบบ
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:hidden">
+                {users.map((user) => (
+                  <div
+                    key={user.id}
+                    className="rounded-2xl border border-white/10 bg-black/40 p-5 shadow-[0_15px_35px_rgba(0,0,0,0.45)]"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-2">
+                        <p className="text-lg font-semibold text-white">{user.displayName}</p>
+                        <div className="space-y-1 text-xs text-white/60">
+                          <p>
+                            <span className="font-semibold text-white/70">โฟลเดอร์:</span> {user.folder}
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="font-semibold text-white/70">สิทธิ์:</span>
+                            <span className="inline-flex items-center rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/70">
+                              {user.role === "admin" ? "Admin" : "Member"}
+                            </span>
+                          </p>
+                          <p>
+                            <span className="font-semibold text-white/70">คำใบ้รหัส:</span> {user.pinHint || "-"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-start gap-2 text-xs sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openEditDialog(user)}
+                          className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1.5 font-semibold text-white/80 transition hover:border-sky-400/60 hover:text-sky-100"
+                        >
+                          <PencilSquareIcon className="h-4 w-4" aria-hidden="true" />
+                          แก้ไข
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(user)}
+                          disabled={isDeletingUserId === user.id}
+                          className="inline-flex items-center gap-2 rounded-full border border-red-400/40 px-3 py-1.5 font-semibold text-red-200 transition hover:border-red-300/60 hover:text-red-50 disabled:cursor-not-allowed disabled:border-red-400/30 disabled:text-red-200/60"
+                        >
+                          <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                          {isDeletingUserId === user.id ? "กำลังลบ..." : "ลบ"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {users.length === 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-6 text-center text-sm text-white/60">
+                    ยังไม่มีผู้ใช้ในระบบ
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -412,7 +468,7 @@ const AdminUsersPage: NextPage<AdminUsersPageProps> = ({ activeUser, users: init
 
       {isEditDialogOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10">
-          <div className="relative w-full max-w-xl rounded-3xl border border-white/10 bg-[#0b0b0f] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.6)]">
+          <div className="relative w-full max-w-xl max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0b0b0f] p-6 shadow-[0_25px_60px_rgba(0,0,0,0.6)] sm:p-8">
             <button
               type="button"
               onClick={closeEditDialog}

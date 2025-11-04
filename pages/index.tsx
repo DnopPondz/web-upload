@@ -994,7 +994,7 @@ const Home: NextPage<HomeProps> = ({
         {isSelectorOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur-sm">
             <div
-              className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
+              className="w-full max-w-xl max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
               role="dialog"
               aria-modal="true"
             >
@@ -1242,7 +1242,7 @@ const Home: NextPage<HomeProps> = ({
               onClick={handleCloseAvatarModal}
             >
               <div
-                className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d13]/95 p-6 text-white shadow-[0_35px_80px_rgba(0,0,0,0.65)]"
+                className="relative w-full max-w-md max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0b0d13]/95 p-6 text-white shadow-[0_35px_80px_rgba(0,0,0,0.65)]"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -2015,7 +2015,7 @@ const Home: NextPage<HomeProps> = ({
           onClick={handleCloseResetPinDialog}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
+            className="w-full max-w-sm max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
             onClick={(event) => event.stopPropagation()}
           >
             <h2 className="text-xl font-semibold">รีเซ็ต PIN</h2>
@@ -2171,7 +2171,7 @@ const Home: NextPage<HomeProps> = ({
           }}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
+            className="w-full max-w-sm max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
             onClick={(event) => event.stopPropagation()}
           >
             <h2 className="text-xl font-semibold">ลบรูปภาพ</h2>
