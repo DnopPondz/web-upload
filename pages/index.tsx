@@ -1593,7 +1593,7 @@ const Home: NextPage<HomeProps> = ({
                 {albumPhotoStats.length > 0 && (
                   <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 shadow-inner shadow-black/25">
                     <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
-                      หมวดไหนมีกี่อัน
+                      จำนวนแต่ละหมวด
                     </h2>
                     <ul className="mt-3 grid gap-2 text-sm text-white/80 sm:grid-cols-2">
                       {albumPhotoStats.map(({ key, label, formattedCount }) => (
