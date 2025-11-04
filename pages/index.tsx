@@ -27,9 +27,10 @@ type HomeProps = {
   images: ImageProps[]
   users: GalleryUser[]
   activeUser: GalleryUser | null
+  cloudName: string | null
 }
 
-const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
+const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => {
   const router = useRouter()
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
 
@@ -198,7 +199,6 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const longPressTriggeredRef = useRef(false)
   const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
 
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
   const buildAvatarUrl = (user: GalleryUser, size: number) => {
     if (!cloudName || !user.avatarPublicId) return null
     return `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,g_auto,w=${size},h=${size}/${user.avatarPublicId}`
@@ -216,6 +216,8 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null)
   const [avatarUploadSuccess, setAvatarUploadSuccess] = useState<string | null>(null)
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false)
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
 
   const syncUpdatedUser = (updatedUser: GalleryUser) => {
     setActiveUserState(updatedUser)
@@ -240,7 +242,30 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   useEffect(() => {
     setAvatarUploadError(null)
     setAvatarUploadSuccess(null)
+    setAvatarPreviewUrl(null)
+    setIsAvatarPreviewOpen(false)
   }, [resolvedActiveUser?.id])
+
+  const handleOpenAvatarModal = () => {
+    if (!resolvedActiveUser) return
+
+    setAvatarUploadError(null)
+    setAvatarUploadSuccess(null)
+    const previewSource = buildAvatarUrl(resolvedActiveUser, 400)
+    setAvatarPreviewUrl(previewSource ?? null)
+    setIsAvatarPreviewOpen(true)
+  }
+
+  const handleCloseAvatarModal = () => {
+    if (isUploadingAvatar) return
+    setIsAvatarPreviewOpen(false)
+    setAvatarPreviewUrl(null)
+  }
+
+  useEffect(() => {
+    if (!isAvatarPreviewOpen) return
+    setAvatarPreviewUrl(resolvedActiveUser ? buildAvatarUrl(resolvedActiveUser, 400) : null)
+  }, [resolvedActiveUser?.id, isAvatarPreviewOpen])
 
   const handleSelectUser = (userId: string) => {
     setSelectedUserId(userId)
@@ -595,7 +620,9 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     reader.readAsDataURL(file)
 
     reader.onloadend = async () => {
+      const previousPreview = avatarPreviewUrl
       const base64File = reader.result as string
+      setAvatarPreviewUrl(base64File)
 
       try {
         const response = await fetch("/api/users/avatar", {
@@ -613,13 +640,20 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
         const data = await response.json()
         if (data?.user) {
           syncUpdatedUser(data.user)
+          const updatedAvatarUrl = buildAvatarUrl(data.user, 400)
+          setAvatarPreviewUrl(updatedAvatarUrl ?? base64File)
         } else if (data?.avatarPublicId) {
-          syncUpdatedUser({ ...currentUser, avatarPublicId: data.avatarPublicId })
+          const updatedUser = { ...currentUser, avatarPublicId: data.avatarPublicId }
+          syncUpdatedUser(updatedUser)
+          const updatedAvatarUrl = buildAvatarUrl(updatedUser, 400)
+          setAvatarPreviewUrl(updatedAvatarUrl ?? base64File)
         }
 
         setAvatarUploadSuccess("อัปโหลดรูปโปรไฟล์เรียบร้อยแล้ว")
       } catch (error: any) {
         setAvatarUploadError(error?.message || "ไม่สามารถอัปโหลดรูปโปรไฟล์ได้")
+        const fallbackPreview = previousPreview ?? buildAvatarUrl(currentUser, 400)
+        setAvatarPreviewUrl(fallbackPreview ?? null)
       } finally {
         setIsUploadingAvatar(false)
         inputElement.value = ""
@@ -988,34 +1022,122 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
             />
           )}
 
-          {metadataStatus && (
-            <div
-              className={`rounded-2xl border p-4 text-sm backdrop-blur ${
-                metadataStatus.type === "success"
-                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                  : "border-red-400/40 bg-red-500/10 text-red-100"
-              }`}
-              data-edit-keep
-            >
-              {metadataStatus.message}
-            </div>
-          )}
+      {metadataStatus && (
+        <div
+          className={`rounded-2xl border p-4 text-sm backdrop-blur ${
+            metadataStatus.type === "success"
+              ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
+              : "border-red-400/40 bg-red-500/10 text-red-100"
+          }`}
+          data-edit-keep
+        >
+          {metadataStatus.message}
+        </div>
+      )}
 
-          <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:p-10">
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center">
-              <div className="flex flex-col gap-6 text-left">
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4 shadow-inner shadow-black/20">
-                  {resolvedActiveUser ? (
+      {isAvatarPreviewOpen && resolvedActiveUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-10 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={handleCloseAvatarModal}
+        >
+          <div
+            className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d13]/95 p-6 text-white shadow-[0_35px_80px_rgba(0,0,0,0.65)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">รูปโปรไฟล์ของ {resolvedActiveUser.displayName}</h2>
+                <p className="mt-1 text-xs text-white/60">แตะรูปด้านล่างหรือปุ่มเพื่ออัปโหลดรูปใหม่</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseAvatarModal}
+                className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/70 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                disabled={isUploadingAvatar}
+              >
+                ปิด
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-col items-center gap-5">
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                className="group relative h-40 w-40 overflow-hidden rounded-full border border-white/10 bg-black/60 shadow-inner shadow-black/40 transition hover:border-cyan-300/70 focus:outline-none focus-visible:border-cyan-300/70"
+                aria-label="อัปโหลดรูปโปรไฟล์ใหม่"
+                disabled={isUploadingAvatar}
+              >
+                <AvatarImage
+                  src={avatarPreviewUrl ?? buildAvatarUrl(resolvedActiveUser, 400)}
+                  alt={resolvedActiveUser.displayName}
+                  size={160}
+                  className="h-full w-full object-cover"
+                />
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 text-xs font-semibold uppercase tracking-[0.35em] text-white/80 opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                  อัปโหลด
+                </span>
+              </button>
+
+              <div className="flex flex-col items-center gap-3 text-center text-xs text-white/60">
+                <p>รองรับไฟล์ภาพสกุล JPG, PNG และ WEBP ขนาดไม่เกิน 10MB</p>
+                <p className="text-white/40">รูปใหม่จะถูกบันทึกไปยัง Cloudinary โฟลเดอร์ userAvatar</p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-cyan-50 disabled:cursor-not-allowed disabled:border-cyan-400/30 disabled:text-cyan-200/60"
+                  disabled={isUploadingAvatar}
+                >
+                  {isUploadingAvatar ? "กำลังอัปโหลด..." : "เลือกไฟล์รูปใหม่"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseAvatarModal}
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:border-white/40 hover:text-white disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                  disabled={isUploadingAvatar}
+                >
+                  ปิดหน้าต่างนี้
+                </button>
+              </div>
+
+              {avatarUploadError && (
+                <p className="text-xs text-red-300">{avatarUploadError}</p>
+              )}
+              {avatarUploadSuccess && (
+                <p className="text-xs text-emerald-300">{avatarUploadSuccess}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_35px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm sm:p-10">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center">
+          <div className="flex flex-col gap-6 text-left">
+            <div className="rounded-2xl border border-white/10 bg-black/40 p-4 shadow-inner shadow-black/20">
+              {resolvedActiveUser ? (
                     <>
                       <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40">
+                        <button
+                          type="button"
+                          onClick={handleOpenAvatarModal}
+                          className="group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40 transition hover:border-cyan-300/70 hover:shadow-[0_0_0_3px_rgba(34,211,238,0.35)] focus:outline-none focus-visible:border-cyan-300/70"
+                          title="ดูรูปโปรไฟล์"
+                        >
                           <AvatarImage
-                            src={activeUserAvatarUrl}
+                            src={avatarPreviewUrl ?? activeUserAvatarUrl}
                             alt={resolvedActiveUser.displayName}
                             size={56}
                             className="h-full w-full object-cover"
                           />
-                        </div>
+                          <span className="pointer-events-none absolute inset-0 hidden items-center justify-center bg-black/45 text-[10px] font-semibold uppercase tracking-[0.3em] text-white/70 group-hover:flex">
+                            ดูรูป
+                          </span>
+                        </button>
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
                             กำลังดูแกลเลอรีของ
@@ -1044,7 +1166,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                         />
                         <button
                           type="button"
-                          onClick={() => avatarInputRef.current?.click()}
+                          onClick={handleOpenAvatarModal}
                           className="rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-cyan-50 disabled:cursor-not-allowed disabled:border-cyan-400/30 disabled:text-cyan-200/60"
                           disabled={isUploadingAvatar}
                         >
@@ -1667,6 +1789,21 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   let users: GalleryUser[] = []
   let activeUser: GalleryUser | null = null
   let images: ImageProps[] = []
+  let cloudName: string | null = null
+
+  try {
+    const config = cloudinary.config() as { cloud_name?: string }
+    cloudName =
+      config?.cloud_name ||
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
+      process.env.CLOUDINARY_CLOUD_NAME ||
+      null
+  } catch (error) {
+    cloudName =
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
+      process.env.CLOUDINARY_CLOUD_NAME ||
+      null
+  }
 
   try {
     const { default: clientPromise } = await import("../utils/mongodb")
@@ -1778,6 +1915,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       images,
       users,
       activeUser,
+      cloudName,
     },
   }
 }
