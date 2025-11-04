@@ -33,12 +33,7 @@ import {
 } from "../utils/session";
 import type { GalleryUser, ImageProps } from "../utils/types";
 import { useLastViewedPhoto } from "../utils/useLastViewedPhoto";
-import { Poppins } from "next/font/google";
 
-const poppins = Poppins({
-  weight: ["600"],
-  subsets: ["latin"],
-});
 
 type HomeProps = {
   images: ImageProps[];
