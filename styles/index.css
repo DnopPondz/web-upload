@@ -9,10 +9,13 @@
 }
 
 
-/* @keyframes wiggle {
-  0%, 100% { transform: rotate(-1deg); }
-  50% { transform: rotate(1deg); }
-}
-.animate-wiggle {
-  animation: wiggle 0.3s ease-in-out infinite;
-} */
+@keyframes glow {
+          from {
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.7),
+              0 0 10px rgba(173, 216, 230, 0.5);
+          }
+          to {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.9),
+              0 0 20px rgba(173, 216, 230, 0.8);
+          }
+        }
