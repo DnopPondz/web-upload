@@ -1823,7 +1823,7 @@ const Home: NextPage<HomeProps> = ({
                       href={`/?photoId=${id}`}
                       as={`/p/${id}`}
                       shallow
-                      className="block cursor-zoom-in"
+                      className="group block cursor-zoom-in"
                       onClick={(event) => {
                         if (longPressTriggeredRef.current || editMode) {
                           event.preventDefault();
@@ -1847,12 +1847,15 @@ const Home: NextPage<HomeProps> = ({
                           width={width}
                           height={height}
                         />
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-4 pb-4 pt-8 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-                          <span className="text-sm font-medium text-white">
-                            ชมภาพแบบเต็ม
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-4 pb-4 pt-10 opacity-0 backdrop-blur-sm transition-opacity duration-500 group-focus-visible:opacity-100 group-hover:opacity-100">
+                          <span className="text-base font-semibold text-white">
+                            {imageTitle || "ยังไม่ตั้งชื่อ"}
                           </span>
-                          <span className="text-xs text-white/70">
-                            คลิกเพื่อเปิดหน้าต่างแกลเลอรี
+                          <span className="text-xs font-medium tracking-[0.35em] text-white/70">
+                            {displayAlbum}
+                          </span>
+                          <span className="text-[0.65rem] text-white/60">
+                            คลิกเพื่อชมแบบเต็ม
                           </span>
                         </div>
                       </div>
@@ -1862,35 +1865,16 @@ const Home: NextPage<HomeProps> = ({
                       className="flex flex-col gap-3 border-t border-white/5 bg-black/35 px-5 py-4 text-left"
                       data-editable-card
                     >
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/45">
-                          ชื่อรูป
-                        </p>
-                        <p
-                          className={`mt-2 text-base font-semibold ${
-                            imageTitle ? "text-white" : "italic text-white/50"
-                          }`}
-                        >
-                          {imageTitle || "ยังไม่ตั้งชื่อ"}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
-                          กลุ่ม
-                        </span>
-                        <span className="text-sm font-medium text-white/80">
-                          {displayAlbum}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                          คำอธิบายรูป
-                        </p>
-                        <p className="mt-2 text-sm leading-relaxed text-white/70">
-                          {descriptionText || "ยังไม่มีคำอธิบายสำหรับรูปนี้"}
-                        </p>
-                      </div>
+                      {(!editMode || !isEditingMetadata) && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                            คำอธิบายรูป
+                          </span>
+                          <p className="text-sm leading-relaxed text-white/75">
+                            {descriptionText || "ยังไม่มีคำอธิบายสำหรับรูปนี้"}
+                          </p>
+                        </div>
+                      )}
 
                       {editMode && (
                         <div className="mt-2" data-editable-card>
