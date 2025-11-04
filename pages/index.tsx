@@ -1208,13 +1208,12 @@ const Home: NextPage<HomeProps> = ({
         <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 pb-20 pt-12 sm:px-6 lg:px-8">
           {photoId && (
             <Modal
-              images={imageData}
-              currentPhoto={currentPhoto}
-              onClose={() => {
-                setLastViewedPhoto(photoId);
-                router.push("/", undefined, { shallow: true });
-              }}
-            />
+  images={imageData}
+  onClose={() => {
+    setLastViewedPhoto(photoId);
+    router.push("/", undefined, { shallow: true });
+  }}
+/>
           )}
 
           {metadataStatus && (

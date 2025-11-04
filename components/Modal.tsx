@@ -13,7 +13,7 @@ export default function Modal({
   images: ImageProps[];
   onClose?: () => void;
 }) {
-  let overlayRef = useRef();
+  const overlayRef = useRef(null);
   const router = useRouter();
 
   const { photoId } = router.query;
@@ -25,12 +25,14 @@ export default function Modal({
   const [curIndex, setCurIndex] = useState(initialIndex);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // Update when URL photoId changes
   useEffect(() => {
     if (Number.isFinite(parsedIndex) && parsedIndex !== curIndex) {
       setCurIndex(parsedIndex);
     }
   }, [parsedIndex, curIndex]);
 
+  // Reset transition state on route complete
   useEffect(() => {
     const handleRouteComplete = () => setIsTransitioning(false);
 
@@ -50,18 +52,15 @@ export default function Modal({
   }
 
   function changePhotoId(newVal: number) {
-    if (isTransitioning) {
-      return;
-    }
+    if (isTransitioning) return;
 
     const clampedValue = Math.max(0, Math.min(newVal, images.length - 1));
-    if (clampedValue === curIndex) {
-      return;
-    }
+    if (clampedValue === curIndex) return;
 
     setDirection(clampedValue > curIndex ? 1 : -1);
     setCurIndex(clampedValue);
     setIsTransitioning(true);
+
     router
       .push(
         {
@@ -69,21 +68,18 @@ export default function Modal({
           query: { photoId: clampedValue },
         },
         `/p/${clampedValue}`,
-        { shallow: true, scroll: false },
+        { shallow: true, scroll: false }
       )
       .catch(() => setIsTransitioning(false));
   }
 
+  // Keyboard navigation
   useKeypress("ArrowRight", () => {
-    if (curIndex + 1 < images.length) {
-      changePhotoId(curIndex + 1);
-    }
+    if (curIndex + 1 < images.length) changePhotoId(curIndex + 1);
   });
 
   useKeypress("ArrowLeft", () => {
-    if (curIndex > 0) {
-      changePhotoId(curIndex - 1);
-    }
+    if (curIndex > 0) changePhotoId(curIndex - 1);
   });
 
   return (
