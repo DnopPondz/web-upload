@@ -8,6 +8,19 @@ export interface ImageProps {
   blurDataUrl?: string;
   album?: string;
   description?: string;
+  imageName?: string;
+}
+
+export type GalleryUserRole = "admin" | "member";
+
+export interface GalleryUser {
+  id: string;
+  displayName: string;
+  folder: string;
+  avatarPublicId?: string;
+  avatarUrl?: string;
+  pinHint?: string;
+  role: GalleryUserRole;
 }
 
 export interface SharedModalProps {

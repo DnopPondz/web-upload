@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next"
 import cloudinary from "../../utils/cloudinary"
 import clientPromise from "../../utils/mongodb"
-
-const sanitizeContextValue = (value: string) => value.replace(/[|=]/g, "-")
+import { buildCloudinaryContextString } from "../../utils/photoMetadata"
+import { ensureAuthenticatedUser } from "../../utils/session"
 
 export default async function handler(
   req: NextApiRequest,
@@ -13,21 +13,32 @@ export default async function handler(
   }
 
   try {
-    const { public_id: publicId, album = "", description = "" } = req.body || {}
+    const user = await ensureAuthenticatedUser(req, res)
+
+    const {
+      public_id: publicId,
+      album = "",
+      description = "",
+      imageName = "",
+    } = req.body || {}
 
     if (!publicId || typeof publicId !== "string") {
       return res.status(400).json({ error: "Missing public_id" })
     }
 
-    const albumValue = album.toString().trim()
-    const descriptionValue = description.toString().trim()
+    if (!publicId.startsWith(`${user.folder}/`)) {
+      return res.status(403).json({ error: "ไม่สามารถแก้ไขข้อมูลของผู้ใช้อื่นได้" })
+    }
 
-    const safeAlbum = sanitizeContextValue(albumValue)
-    const safeDescription = sanitizeContextValue(descriptionValue)
+    const { contextString, trimmedValues } = buildCloudinaryContextString({
+      album,
+      description,
+      imageName,
+    })
 
-    const contextParts = [`album=${safeAlbum}`, `description=${safeDescription}`]
-
-    await cloudinary.uploader.add_context(contextParts.join("|"), [publicId])
+    if (contextString) {
+      await cloudinary.uploader.add_context(contextString, [publicId])
+    }
 
     const client = await clientPromise
     const db = client.db(process.env.MONGODB_DB || "img-detail")
@@ -38,8 +49,10 @@ export default async function handler(
       {
         $set: {
           public_id: publicId,
-          album: albumValue,
-          description: descriptionValue,
+          album: trimmedValues.album ?? "",
+          description: trimmedValues.description ?? "",
+          imageName: trimmedValues.imageName ?? "",
+          ownerId: user.id,
           updatedAt: new Date(),
         },
       },
@@ -48,9 +61,10 @@ export default async function handler(
 
     return res.status(200).json({ success: true })
   } catch (error: any) {
+    const statusCode = error?.statusCode === 401 ? 401 : 500
     console.error("Update metadata error:", error)
     return res
-      .status(500)
+      .status(statusCode)
       .json({ error: error?.message || "เกิดข้อผิดพลาดในการบันทึกข้อมูล" })
   }
 }

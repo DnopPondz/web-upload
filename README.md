@@ -29,3 +29,32 @@ pnpm create next-app --example with-cloudinary with-cloudinary-app
 ## References
 
 - Cloudinary API: https://cloudinary.com/documentation/transformation_reference
+
+## Multi-user PIN access
+
+The gallery now supports per-user folders that are protected with a PIN code.
+
+1. Create a `galleryUsers` collection in MongoDB with documents shaped like:
+
+   ```json
+   {
+     "displayName": "User 1",
+     "folder": "userimg1",
+     "pinHash": "<salt:hash>",
+     "avatarPublicId": "optional/avatar/public_id",
+     "pinHint": "(optional) ตัวช่วยจำรหัส"
+   }
+   ```
+
+   Use the helper exported from `utils/pinHash.ts` to generate the `pinHash` value for a PIN before inserting it, or call the
+   `POST /api/users/register` endpoint with `displayName`, `folder`, and `pin` to insert a new user through the API. Optional
+   fields include `avatarPublicId` and `pinHint`.
+
+   Signed-in members can update their own credentials through the in-app "รีเซ็ต PIN" dialog, which sends a `POST /api/users/reset-pin`
+   request that verifies the current PIN before accepting a new PIN and optional hint.
+
+2. Upload user photos to Cloudinary folders that match the `folder` field.
+
+3. Define `USER_PIN_SECRET` in `.env.local`; it is used to sign the session cookie after a PIN is verified.
+
+When a visitor opens the site they choose their user card, enter the PIN, and only the images from that user's Cloudinary folder are displayed. All uploads, deletions, and metadata updates are scoped to the authenticated user's folder.

@@ -53,7 +53,10 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
 
     const publicIds = results.resources.map((result: any) => result.public_id);
 
-    const metadataMap = new Map<string, { album?: string; description?: string }>();
+    const metadataMap = new Map<
+      string,
+      { album?: string; description?: string; imageName?: string }
+    >();
 
     if (process.env.MONGODB_URI && publicIds.length > 0) {
       try {
@@ -64,6 +67,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
           public_id: string;
           album?: string;
           description?: string;
+          imageName?: string;
         }>("photoMetadata");
 
         const documents = await collection
@@ -74,6 +78,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
           metadataMap.set(doc.public_id, {
             album: doc.album ?? "",
             description: doc.description ?? "",
+            imageName: doc.imageName ?? "",
           });
         });
       } catch (error) {
@@ -94,6 +99,10 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
       description:
         metadataMap.get(result.public_id)?.description ??
         result?.context?.custom?.description ??
+        "",
+      imageName:
+        metadataMap.get(result.public_id)?.imageName ??
+        result?.context?.custom?.imageName ??
         "",
     }));
 
