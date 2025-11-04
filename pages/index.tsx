@@ -18,6 +18,11 @@ import Bridge from "../components/Icons/Bridge"
 import Modal from "../components/Modal"
 import AvatarImage from "../components/AvatarImage"
 import cloudinary from "../utils/cloudinary"
+import {
+  buildCloudinaryImageUrl,
+  injectCloudinaryTransformation,
+  resolveCloudinaryCloudName,
+} from "../utils/cloudinaryHelpers"
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder"
 import { clearSessionCookie, getAuthenticatedUser, mapUserDocs, SESSION_COOKIE_NAME } from "../utils/session"
 import type { GalleryUser, ImageProps } from "../utils/types"
@@ -200,8 +205,27 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const randomSizes: ThumbSizeKey[] = ["small", "medium", "large"]
 
   const buildAvatarUrl = (user: GalleryUser, size: number) => {
-    if (!cloudName || !user.avatarPublicId) return null
-    return `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,g_auto,w=${size},h=${size}/${user.avatarPublicId}`
+    if (!user) return null
+
+    const transformation = `c_fill,g_auto,w=${size},h=${size}`
+    const preferredCloudName = cloudName ?? resolveCloudinaryCloudName()
+
+    if (preferredCloudName && user.avatarPublicId) {
+      return `https://res.cloudinary.com/${preferredCloudName}/image/upload/${transformation}/${user.avatarPublicId}`
+    }
+
+    if (user.avatarUrl) {
+      return injectCloudinaryTransformation(user.avatarUrl, transformation)
+    }
+
+    if (user.avatarPublicId) {
+      const fallbackUrl = buildCloudinaryImageUrl(user.avatarPublicId)
+      if (fallbackUrl) {
+        return injectCloudinaryTransformation(fallbackUrl, transformation)
+      }
+    }
+
+    return null
   }
 
   const selectedUser = useMemo(
@@ -643,7 +667,11 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
           const updatedAvatarUrl = buildAvatarUrl(data.user, 400)
           setAvatarPreviewUrl(updatedAvatarUrl ?? base64File)
         } else if (data?.avatarPublicId) {
-          const updatedUser = { ...currentUser, avatarPublicId: data.avatarPublicId }
+          const updatedUser = {
+            ...currentUser,
+            avatarPublicId: data.avatarPublicId,
+            avatarUrl: data.avatarUrl ?? currentUser.avatarUrl,
+          }
           syncUpdatedUser(updatedUser)
           const updatedAvatarUrl = buildAvatarUrl(updatedUser, 400)
           setAvatarPreviewUrl(updatedAvatarUrl ?? base64File)
@@ -1819,6 +1847,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
             displayName: 1,
             folder: 1,
             avatarPublicId: 1,
+            avatarUrl: 1,
             pinHint: 1,
             role: 1,
           },

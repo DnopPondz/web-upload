@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { ObjectId } from "mongodb"
 import clientPromise from "../../../utils/mongodb"
 import { verifyPinHash } from "../../../utils/pinHash"
+import { buildCloudinaryImageUrl } from "../../../utils/cloudinaryHelpers"
 import { createSessionCookie } from "../../../utils/session"
 
 export default async function handler(
@@ -45,12 +46,24 @@ export default async function handler(
 
     res.setHeader("Set-Cookie", createSessionCookie(userDoc._id.toString()))
 
+    const avatarPublicId =
+      typeof userDoc.avatarPublicId === "string" && userDoc.avatarPublicId.trim()
+        ? userDoc.avatarPublicId.trim()
+        : undefined
+    const rawAvatarUrl =
+      typeof userDoc.avatarUrl === "string" && userDoc.avatarUrl.trim()
+        ? userDoc.avatarUrl.trim()
+        : undefined
+
+    const avatarUrl = rawAvatarUrl || buildCloudinaryImageUrl(avatarPublicId)
+
     return res.status(200).json({
       user: {
         id: userDoc._id.toString(),
         displayName: userDoc.displayName,
         folder: userDoc.folder,
-        avatarPublicId: userDoc.avatarPublicId ?? undefined,
+        avatarPublicId,
+        avatarUrl: avatarUrl ?? undefined,
       },
     })
   } catch (error: any) {

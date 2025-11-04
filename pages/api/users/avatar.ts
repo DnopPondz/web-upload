@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import { ObjectId } from "mongodb"
 import cloudinary from "../../../utils/cloudinary"
 import clientPromise from "../../../utils/mongodb"
+import { buildCloudinaryImageUrl } from "../../../utils/cloudinaryHelpers"
 import { ensureAuthenticatedUser, mapUserDocument } from "../../../utils/session"
 
 export const config = {
@@ -46,11 +47,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const collection = db.collection("galleryUsers")
     const userId = new ObjectId(user.id)
 
+    const resolvedAvatarUrl =
+      uploadResponse.secure_url || buildCloudinaryImageUrl(uploadResponse.public_id)
+
     await collection.updateOne(
       { _id: userId },
       {
         $set: {
           avatarPublicId: uploadResponse.public_id,
+          avatarUrl: resolvedAvatarUrl,
+          updatedAt: new Date(),
         },
       },
     )
@@ -69,9 +75,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       avatarPublicId: uploadResponse.public_id,
+      avatarUrl: resolvedAvatarUrl,
       user: updatedUser ?? {
         ...user,
         avatarPublicId: uploadResponse.public_id,
+        avatarUrl: resolvedAvatarUrl ?? undefined,
       },
     })
   } catch (error: any) {

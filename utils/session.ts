@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from "crypto"
 import { ObjectId } from "mongodb"
 import clientPromise from "./mongodb"
 import type { GalleryUser, GalleryUserRole } from "./types"
+import {
+  buildCloudinaryImageUrl,
+  extractPublicIdFromUrl,
+} from "./cloudinaryHelpers"
 
 const SESSION_COOKIE_NAME = "galleryAuth"
 const SESSION_MAX_AGE = 60 * 60 * 12 // 12 hours
@@ -68,14 +72,30 @@ const serializeCookie = (name: string, value: string, options: CookieOptions = {
 
 const resolveRole = (role: any): GalleryUserRole => (role === "admin" ? "admin" : "member")
 
-export const mapUserDocument = (doc: any): GalleryUser => ({
-  id: doc._id.toString(),
-  displayName: doc.displayName,
-  folder: doc.folder,
-  avatarPublicId: doc.avatarPublicId ?? undefined,
-  pinHint: doc.pinHint ?? undefined,
-  role: resolveRole(doc.role),
-})
+const normalizeString = (value: any) => {
+  if (typeof value !== "string") {
+    return ""
+  }
+  return value.trim()
+}
+
+export const mapUserDocument = (doc: any): GalleryUser => {
+  const rawAvatarUrl = normalizeString(doc.avatarUrl)
+  const rawAvatarPublicId = normalizeString(doc.avatarPublicId)
+
+  const derivedPublicId = rawAvatarPublicId || extractPublicIdFromUrl(rawAvatarUrl)
+  const resolvedAvatarUrl = rawAvatarUrl || buildCloudinaryImageUrl(derivedPublicId)
+
+  return {
+    id: doc._id.toString(),
+    displayName: doc.displayName,
+    folder: doc.folder,
+    avatarPublicId: derivedPublicId || undefined,
+    avatarUrl: resolvedAvatarUrl,
+    pinHint: doc.pinHint ?? undefined,
+    role: resolveRole(doc.role),
+  }
+}
 
 export const signUserSession = (userId: string) => `${userId}.${createSignature(userId)}`
 

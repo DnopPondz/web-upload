@@ -17,6 +17,7 @@ export interface GalleryUser {
   displayName: string;
   folder: string;
   avatarPublicId?: string;
+  avatarUrl?: string;
   pinHint?: string;
   role: GalleryUserRole;
 }

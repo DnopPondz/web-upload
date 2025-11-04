@@ -21,6 +21,7 @@ export default async function handler(
           displayName: 1,
           folder: 1,
           avatarPublicId: 1,
+          avatarUrl: 1,
           pinHint: 1,
           role: 1,
         },
