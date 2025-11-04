@@ -1,6 +1,12 @@
 
 
-import { TrashIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronDownIcon,
+  PhotoIcon,
+  RectangleGroupIcon,
+  Squares2X2Icon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import type { GetServerSidePropsContext, NextPage } from "next";
 import Head from "next/head";
 import Image from "next/image";
@@ -11,6 +17,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
   type FormEvent,
 } from "react";
@@ -224,6 +231,8 @@ const Home: NextPage<HomeProps> = ({
   );
   const [uploadImageName, setUploadImageName] = useState("");
   const [uploadAlbum, setUploadAlbum] = useState("");
+  const [selectedAlbumKeyOverride, setSelectedAlbumKeyOverride] =
+    useState<string | null>(null);
   const [uploadDescription, setUploadDescription] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -538,6 +547,31 @@ const Home: NextPage<HomeProps> = ({
     ];
   }, [imageData]);
 
+  const albumSuggestions = useMemo(
+    () => albumOptions.filter((option) => option.key !== "__all__"),
+    [albumOptions]
+  );
+
+  const resolvedAlbumSelectValue = useMemo(() => {
+    if (selectedAlbumKeyOverride !== null) {
+      return selectedAlbumKeyOverride;
+    }
+
+    const trimmedValue = uploadAlbum.trim();
+    if (!trimmedValue) {
+      return "";
+    }
+
+    const matchedOption = albumSuggestions.find(
+      (option) =>
+        option.label.localeCompare(trimmedValue, "th", {
+          sensitivity: "base",
+        }) === 0
+    );
+
+    return matchedOption ? matchedOption.key : "";
+  }, [albumSuggestions, selectedAlbumKeyOverride, uploadAlbum]);
+
   const filteredImages = useMemo(() => {
     if (albumFilter === "__all__") {
       return imageData;
@@ -619,6 +653,7 @@ const Home: NextPage<HomeProps> = ({
     setUploadImageName("");
     setUploadAlbum("");
     setUploadDescription("");
+    setSelectedAlbumKeyOverride(null);
     if (uploadInputRef.current) {
       uploadInputRef.current.value = "";
     }
@@ -638,6 +673,39 @@ const Home: NextPage<HomeProps> = ({
     } else {
       setUploadImageName("");
     }
+  };
+
+  const handleAlbumInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setSelectedAlbumKeyOverride(null);
+    setUploadAlbum(event.target.value);
+  };
+
+  const handleAlbumSelectChange = (
+    event: ChangeEvent<HTMLSelectElement>
+  ) => {
+    const { value } = event.target;
+
+    if (value === "") {
+      setSelectedAlbumKeyOverride(null);
+      return;
+    }
+
+    setSelectedAlbumKeyOverride(value);
+
+    const selectedOption = albumSuggestions.find(
+      (option) => option.key === value
+    );
+
+    if (!selectedOption) {
+      return;
+    }
+
+    if (selectedOption.key === fallbackAlbumKey) {
+      setUploadAlbum("");
+      return;
+    }
+
+    setUploadAlbum(selectedOption.label);
   };
 
   const handleClearSelectedFile = () => {
@@ -725,6 +793,7 @@ const Home: NextPage<HomeProps> = ({
     setUploadDescription("");
     setUploadSuccess(null);
     setUploadError(null);
+    setSelectedAlbumKeyOverride(null);
     if (uploadInputRef.current) {
       uploadInputRef.current.value = "";
     }
@@ -989,7 +1058,7 @@ const Home: NextPage<HomeProps> = ({
         {isSelectorOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-10 backdrop-blur-sm">
             <div
-              className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
+              className="w-full max-w-xl max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#090b10]/95 p-6 text-white shadow-xl sm:p-8"
               role="dialog"
               aria-modal="true"
             >
@@ -1237,7 +1306,7 @@ const Home: NextPage<HomeProps> = ({
               onClick={handleCloseAvatarModal}
             >
               <div
-                className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d13]/95 p-6 text-white shadow-[0_35px_80px_rgba(0,0,0,0.65)]"
+                className="relative w-full max-w-md max-h-[calc(100vh-4rem)] overflow-y-auto rounded-3xl border border-white/10 bg-[#0b0d13]/95 p-6 text-white shadow-[0_35px_80px_rgba(0,0,0,0.65)]"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -1522,14 +1591,39 @@ const Home: NextPage<HomeProps> = ({
                       <label className="text-xs font-semibold uppercase tracking-[0.25em] text-white/55">
                         หมวดหมู่
                       </label>
+                      {albumSuggestions.length > 0 && (
+                        <div className="relative">
+                          <select
+                            value={resolvedAlbumSelectValue}
+                            onChange={handleAlbumSelectChange}
+                            disabled={isUploading || !resolvedActiveUser}
+                            className="w-full appearance-none rounded-xl border border-white/15 bg-black/40 px-3 py-2 pr-10 text-sm text-white shadow-inner shadow-black/25 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
+                          >
+                            <option value="">
+                              เลือกหมวดหมู่ที่มีอยู่
+                            </option>
+                            {albumSuggestions.map(({ key, label }) => (
+                              <option key={key} value={key}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+                        </div>
+                      )}
                       <input
                         type="text"
                         value={uploadAlbum}
-                        onChange={(event) => setUploadAlbum(event.target.value)}
+                        onChange={handleAlbumInputChange}
                         disabled={isUploading || !resolvedActiveUser}
                         placeholder="เช่น สัมมนา, ปาร์ตี้"
                         className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white shadow-inner shadow-black/25 transition focus:border-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/40"
                       />
+                      {albumSuggestions.length > 0 && (
+                        <p className="text-xs text-white/55">
+                          เลือกจากรายการด้านบนหรือพิมพ์หมวดหมู่ใหม่ที่นี่
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1662,12 +1756,25 @@ const Home: NextPage<HomeProps> = ({
                 </button>
               </div>
 
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                <div className="flex flex-col gap-2" data-edit-keep>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-                    ขนาดรูปตัวอย่าง
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
+              <div className="grid gap-5 lg:grid-cols-3">
+                <div
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur transition duration-300 hover:border-white/25 hover:bg-white/[0.06]"
+                  data-edit-keep
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-400/10 text-cyan-300">
+                      <Squares2X2Icon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        ขนาดรูปตัวอย่าง
+                      </p>
+                      <p className="text-sm text-white/70">
+                        ปรับขนาดรูปภาพให้เหมาะกับการชมของคุณ
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
                       const isActive = thumbSize === key;
                       return (
@@ -1686,11 +1793,24 @@ const Home: NextPage<HomeProps> = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2" data-edit-keep>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-                    รูปแบบการจัดเรียง
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur transition duration-300 hover:border-white/25 hover:bg-white/[0.06]"
+                  data-edit-keep
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-400/10 text-purple-200">
+                      <RectangleGroupIcon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        รูปแบบการจัดเรียง
+                      </p>
+                      <p className="text-sm text-white/70">
+                        เลือกรูปแบบตารางหรือแถวตามสไตล์ที่ชอบ
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {layoutOptions.map(({ key, label }) => {
                       const isActive = layoutStyle === key;
                       return (
@@ -1709,11 +1829,24 @@ const Home: NextPage<HomeProps> = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2" data-edit-keep>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-                    กลุ่มรูปภาพ
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur transition duration-300 hover:border-white/25 hover:bg-white/[0.06]"
+                  data-edit-keep
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-200">
+                      <PhotoIcon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        กลุ่มรูปภาพ
+                      </p>
+                      <p className="text-sm text-white/70">
+                        จัดหมวดหมู่รูปภาพเพื่อค้นหาได้รวดเร็ว
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {albumOptions.map(({ key, label }) => {
                       const isActive = albumFilter === key;
                       return (
@@ -1733,10 +1866,10 @@ const Home: NextPage<HomeProps> = ({
                 </div>
               </div>
 
-              <p className="text-xs text-white/55">
-                เคล็ดลับ: กดค้างที่รูปเพื่อเปิดโหมดจัดการ หรือใช้ปุ่ม
-                "โหมดจัดการรูป" เพื่อเลือกลบภาพที่ไม่ต้องการ
-              </p>
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.05] to-transparent p-5 text-xs text-white/65">
+                เคล็ดลับ: กดค้างที่รูปเพื่อเปิดโหมดจัดการ หรือใช้ปุ่ม "โหมดจัดการรูป"
+                เพื่อเลือกลบภาพที่ไม่ต้องการ
+              </div>
             </div>
           </section>
 
@@ -1779,7 +1912,7 @@ const Home: NextPage<HomeProps> = ({
                       href={`/?photoId=${id}`}
                       as={`/p/${id}`}
                       shallow
-                      className="block cursor-zoom-in"
+                      className="group block cursor-zoom-in"
                       onClick={(event) => {
                         if (longPressTriggeredRef.current || editMode) {
                           event.preventDefault();
@@ -1803,12 +1936,15 @@ const Home: NextPage<HomeProps> = ({
                           width={width}
                           height={height}
                         />
-                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-4 pb-4 pt-8 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-                          <span className="text-sm font-medium text-white">
-                            ชมภาพแบบเต็ม
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-4 pb-4 pt-10 opacity-0 backdrop-blur-sm transition-opacity duration-500 group-focus-visible:opacity-100 group-hover:opacity-100">
+                          <span className="text-base font-semibold text-white">
+                            {imageTitle || "ยังไม่ตั้งชื่อ"}
                           </span>
-                          <span className="text-xs text-white/70">
-                            คลิกเพื่อเปิดหน้าต่างแกลเลอรี
+                          <span className="text-xs font-medium tracking-[0.35em] text-white/70">
+                            {displayAlbum}
+                          </span>
+                          <span className="text-[0.65rem] text-white/60">
+                            คลิกเพื่อชมแบบเต็ม
                           </span>
                         </div>
                       </div>
@@ -1818,35 +1954,16 @@ const Home: NextPage<HomeProps> = ({
                       className="flex flex-col gap-3 border-t border-white/5 bg-black/35 px-5 py-4 text-left"
                       data-editable-card
                     >
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/45">
-                          ชื่อรูป
-                        </p>
-                        <p
-                          className={`mt-2 text-base font-semibold ${
-                            imageTitle ? "text-white" : "italic text-white/50"
-                          }`}
-                        >
-                          {imageTitle || "ยังไม่ตั้งชื่อ"}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
-                          กลุ่ม
-                        </span>
-                        <span className="text-sm font-medium text-white/80">
-                          {displayAlbum}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                          คำอธิบายรูป
-                        </p>
-                        <p className="mt-2 text-sm leading-relaxed text-white/70">
-                          {descriptionText || "ยังไม่มีคำอธิบายสำหรับรูปนี้"}
-                        </p>
-                      </div>
+                      {(!editMode || !isEditingMetadata) && (
+                        <div className="space-y-2">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                            คำอธิบายรูป
+                          </span>
+                          <p className="text-sm leading-relaxed text-white/75">
+                            {descriptionText || "ยังไม่มีคำอธิบายสำหรับรูปนี้"}
+                          </p>
+                        </div>
+                      )}
 
                       {editMode && (
                         <div className="mt-2" data-editable-card>
@@ -1987,7 +2104,7 @@ const Home: NextPage<HomeProps> = ({
           onClick={handleCloseResetPinDialog}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
+            className="w-full max-w-sm max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
             onClick={(event) => event.stopPropagation()}
           >
             <h2 className="text-xl font-semibold">รีเซ็ต PIN</h2>
@@ -2143,7 +2260,7 @@ const Home: NextPage<HomeProps> = ({
           }}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
+            className="w-full max-w-sm max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#101016]/95 p-6 text-white shadow-[0_30px_60px_rgba(0,0,0,0.7)] backdrop-blur"
             onClick={(event) => event.stopPropagation()}
           >
             <h2 className="text-xl font-semibold">ลบรูปภาพ</h2>
