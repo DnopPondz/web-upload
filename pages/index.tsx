@@ -1,6 +1,11 @@
 
 
-import { TrashIcon } from "@heroicons/react/24/outline";
+import {
+  PhotoIcon,
+  RectangleGroupIcon,
+  Squares2X2Icon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import type { GetServerSidePropsContext, NextPage } from "next";
 import Head from "next/head";
 import Image from "next/image";
@@ -1662,12 +1667,25 @@ const Home: NextPage<HomeProps> = ({
                 </button>
               </div>
 
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                <div className="flex flex-col gap-2" data-edit-keep>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-                    ขนาดรูปตัวอย่าง
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
+              <div className="grid gap-5 lg:grid-cols-3">
+                <div
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur transition duration-300 hover:border-white/25 hover:bg-white/[0.06]"
+                  data-edit-keep
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-400/10 text-cyan-300">
+                      <Squares2X2Icon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        ขนาดรูปตัวอย่าง
+                      </p>
+                      <p className="text-sm text-white/70">
+                        ปรับขนาดรูปภาพให้เหมาะกับการชมของคุณ
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {(Object.keys(sizePresets) as ThumbSizeKey[]).map((key) => {
                       const isActive = thumbSize === key;
                       return (
@@ -1686,11 +1704,24 @@ const Home: NextPage<HomeProps> = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2" data-edit-keep>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-                    รูปแบบการจัดเรียง
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur transition duration-300 hover:border-white/25 hover:bg-white/[0.06]"
+                  data-edit-keep
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-400/10 text-purple-200">
+                      <RectangleGroupIcon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        รูปแบบการจัดเรียง
+                      </p>
+                      <p className="text-sm text-white/70">
+                        เลือกรูปแบบตารางหรือแถวตามสไตล์ที่ชอบ
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {layoutOptions.map(({ key, label }) => {
                       const isActive = layoutStyle === key;
                       return (
@@ -1709,11 +1740,24 @@ const Home: NextPage<HomeProps> = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2" data-edit-keep>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
-                    กลุ่มรูปภาพ
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur transition duration-300 hover:border-white/25 hover:bg-white/[0.06]"
+                  data-edit-keep
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-200">
+                      <PhotoIcon className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-white/50">
+                        กลุ่มรูปภาพ
+                      </p>
+                      <p className="text-sm text-white/70">
+                        จัดหมวดหมู่รูปภาพเพื่อค้นหาได้รวดเร็ว
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     {albumOptions.map(({ key, label }) => {
                       const isActive = albumFilter === key;
                       return (
@@ -1733,10 +1777,10 @@ const Home: NextPage<HomeProps> = ({
                 </div>
               </div>
 
-              <p className="text-xs text-white/55">
-                เคล็ดลับ: กดค้างที่รูปเพื่อเปิดโหมดจัดการ หรือใช้ปุ่ม
-                "โหมดจัดการรูป" เพื่อเลือกลบภาพที่ไม่ต้องการ
-              </p>
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.05] to-transparent p-5 text-xs text-white/65">
+                เคล็ดลับ: กดค้างที่รูปเพื่อเปิดโหมดจัดการ หรือใช้ปุ่ม "โหมดจัดการรูป"
+                เพื่อเลือกลบภาพที่ไม่ต้องการ
+              </div>
             </div>
           </section>
 
