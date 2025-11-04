@@ -212,7 +212,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser, cloudName }) => 
   const buildAvatarUrl = (user: GalleryUser, size: number) => {
     if (!user) return null
 
-    const transformation = `c_fill,g_auto,w=${size},h=${size}`
+    const transformation = `c_fill,g_auto,w_${size},h_${size}`
 
     if (user.avatarUrl) {
       return injectCloudinaryTransformation(user.avatarUrl, transformation)
