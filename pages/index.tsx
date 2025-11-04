@@ -155,6 +155,13 @@ const Home: NextPage<HomeProps> = ({
 
   type LayoutKey = "row" | "grid" | "flex" | "random";
 
+  type AlbumPhotoStat = {
+    key: string;
+    label: string;
+    count: number;
+    formattedCount: string;
+  };
+
   const layoutSizeClasses: Record<
     LayoutKey,
     {
@@ -551,6 +558,39 @@ const Home: NextPage<HomeProps> = ({
     () => albumOptions.filter((option) => option.key !== "__all__"),
     [albumOptions]
   );
+
+  const albumPhotoStats = useMemo<AlbumPhotoStat[]>(() => {
+    const counts = new Map<string, AlbumPhotoStat>();
+
+    imageData.forEach((image) => {
+      const key = getAlbumKey(image.album);
+      const label =
+        key === fallbackAlbumKey
+          ? fallbackAlbumLabel
+          : (image.album ?? "").trim() || fallbackAlbumLabel;
+
+      const existing = counts.get(key);
+      if (existing) {
+        const updatedCount = existing.count + 1;
+        counts.set(key, {
+          ...existing,
+          count: updatedCount,
+          formattedCount: `${updatedCount.toLocaleString("th-TH")} รูป`,
+        });
+      } else {
+        counts.set(key, {
+          key,
+          label,
+          count: 1,
+          formattedCount: `${(1).toLocaleString("th-TH")} รูป`,
+        });
+      }
+    });
+
+    return Array.from(counts.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "th")
+    );
+  }, [fallbackAlbumKey, fallbackAlbumLabel, imageData]);
 
   const resolvedAlbumSelectValue = useMemo(() => {
     if (selectedAlbumKeyOverride !== null) {
@@ -1550,6 +1590,24 @@ const Home: NextPage<HomeProps> = ({
                     </dd>
                   </div>
                 </dl>
+                {albumPhotoStats.length > 0 && (
+                  <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 shadow-inner shadow-black/25">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+                      จำนวนแต่ละหมวด
+                    </h2>
+                    <ul className="mt-3 grid gap-2 text-sm text-white/80 sm:grid-cols-2">
+                      {albumPhotoStats.map(({ key, label, formattedCount }) => (
+                        <li
+                          key={key}
+                          className="flex items-center justify-between rounded-lg border border-white/5 bg-black/20 px-3 py-2"
+                        >
+                          <span className="font-medium text-white">{label}</span>
+                          <span className="text-white/70">{formattedCount}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/15 via-white/5 to-white/[0.02] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
