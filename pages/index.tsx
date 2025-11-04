@@ -16,6 +16,7 @@ import {
 } from "react"
 import Bridge from "../components/Icons/Bridge"
 import Modal from "../components/Modal"
+import AvatarImage from "../components/AvatarImage"
 import cloudinary from "../utils/cloudinary"
 import getBase64ImageUrl from "../utils/generateBlurPlaceholder"
 import { clearSessionCookie, getAuthenticatedUser, mapUserDocs, SESSION_COOKIE_NAME } from "../utils/session"
@@ -33,6 +34,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const [lastViewedPhoto, setLastViewedPhoto] = useLastViewedPhoto()
 
   const [imageData, setImageData] = useState(images)
+  const [userCards, setUserCards] = useState(users)
   const [albumFilter, setAlbumFilter] = useState<string>("__all__")
   const [editingImageId, setEditingImageId] = useState<number | null>(null)
   const [editAlbum, setEditAlbum] = useState("")
@@ -50,6 +52,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   const [isVerifyingPin, setIsVerifyingPin] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const pinInputRef = useRef<HTMLInputElement | null>(null)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const [isResetPinDialogOpen, setIsResetPinDialogOpen] = useState(false)
   const [currentPinValue, setCurrentPinValue] = useState("")
   const [newPinValue, setNewPinValue] = useState("")
@@ -77,6 +80,10 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   }, [activeUser])
 
   useEffect(() => {
+    setUserCards(users)
+  }, [users])
+
+  useEffect(() => {
     setIsSelectorOpen(!activeUser)
     if (!activeUser) {
       setSelectedUserId(null)
@@ -99,10 +106,10 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   }, [isSelectorOpen])
 
   useEffect(() => {
-    if (isSelectorOpen && users.length === 1 && !selectedUserId) {
-      setSelectedUserId(users[0].id)
+    if (isSelectorOpen && userCards.length === 1 && !selectedUserId) {
+      setSelectedUserId(userCards[0].id)
     }
-  }, [isSelectorOpen, users, selectedUserId])
+  }, [isSelectorOpen, userCards, selectedUserId])
 
   const sizePresets = {
     small: { label: "เล็ก", width: 480, height: 320 },
@@ -198,24 +205,42 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
   }
 
   const selectedUser = useMemo(
-    () => users.find((user) => user.id === selectedUserId) ?? null,
-    [users, selectedUserId],
+    () => userCards.find((user) => user.id === selectedUserId) ?? null,
+    [userCards, selectedUserId],
   )
   const resolvedActiveUser = activeUserState ?? activeUser ?? null
   const canDismissUserSelector = Boolean(resolvedActiveUser)
   const activeUserAvatarUrl = resolvedActiveUser ? buildAvatarUrl(resolvedActiveUser, 160) : null
   const isActiveUserAdmin = resolvedActiveUser?.role === "admin"
-  const activeUserInitials = useMemo(() => {
-    if (!resolvedActiveUser?.displayName) return "?"
-    return (
-      resolvedActiveUser.displayName
-        .split(" ")
-        .filter(Boolean)
-        .map((part) => part[0]?.toUpperCase())
-        .join("")
-        .slice(0, 2) || "?"
-    )
-  }, [resolvedActiveUser])
+
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null)
+  const [avatarUploadSuccess, setAvatarUploadSuccess] = useState<string | null>(null)
+
+  const syncUpdatedUser = (updatedUser: GalleryUser) => {
+    setActiveUserState(updatedUser)
+    setUserCards((prev) => {
+      let found = false
+      const updatedList = prev.map((user) => {
+        if (user.id === updatedUser.id) {
+          found = true
+          return { ...user, ...updatedUser }
+        }
+        return user
+      })
+
+      if (!found) {
+        return [...updatedList, updatedUser]
+      }
+
+      return updatedList
+    })
+  }
+
+  useEffect(() => {
+    setAvatarUploadError(null)
+    setAvatarUploadSuccess(null)
+  }, [resolvedActiveUser?.id])
 
   const handleSelectUser = (userId: string) => {
     setSelectedUserId(userId)
@@ -293,6 +318,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
       })
 
       setIsSelectorOpen(true)
+      setActiveUserState(null)
       await router.replace(router.asPath, undefined, { scroll: false })
     } catch (error) {
       console.error("Failed to logout", error)
@@ -373,7 +399,7 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
 
       const data = await response.json()
       if (data?.user) {
-        setActiveUserState(data.user)
+        syncUpdatedUser(data.user)
         setPinHintValue(data.user.pinHint ?? "")
       }
 
@@ -541,6 +567,72 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
     }
   }
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const inputElement = event.target
+
+    if (!resolvedActiveUser) {
+      setAvatarUploadError("กรุณาเลือกผู้ใช้ก่อนเปลี่ยนรูปโปรไฟล์")
+      inputElement.value = ""
+      return
+    }
+
+    const currentUser = resolvedActiveUser
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarUploadError("กรุณาเลือกไฟล์รูปภาพเท่านั้น")
+      inputElement.value = ""
+      return
+    }
+
+    setIsUploadingAvatar(true)
+    setAvatarUploadError(null)
+    setAvatarUploadSuccess(null)
+
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+
+    reader.onloadend = async () => {
+      const base64File = reader.result as string
+
+      try {
+        const response = await fetch("/api/users/avatar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ file: base64File }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "ไม่สามารถอัปโหลดรูปโปรไฟล์ได้" }))
+          throw new Error(errorData.error || "ไม่สามารถอัปโหลดรูปโปรไฟล์ได้")
+        }
+
+        const data = await response.json()
+        if (data?.user) {
+          syncUpdatedUser(data.user)
+        } else if (data?.avatarPublicId) {
+          syncUpdatedUser({ ...currentUser, avatarPublicId: data.avatarPublicId })
+        }
+
+        setAvatarUploadSuccess("อัปโหลดรูปโปรไฟล์เรียบร้อยแล้ว")
+      } catch (error: any) {
+        setAvatarUploadError(error?.message || "ไม่สามารถอัปโหลดรูปโปรไฟล์ได้")
+      } finally {
+        setIsUploadingAvatar(false)
+        inputElement.value = ""
+      }
+    }
+
+    reader.onerror = () => {
+      setAvatarUploadError("ไม่สามารถอ่านไฟล์ที่เลือกได้")
+      setIsUploadingAvatar(false)
+      inputElement.value = ""
+    }
+  }
+
   // --- Long press handlers for edit mode ---
   const handlePressStart = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current)
@@ -699,10 +791,10 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
               aria-modal="true"
             >
               <div className="flex flex-col gap-6">
-                {users.length > 0 ? (
-                  <>
-                    {!selectedUser ? (
-                      <>
+          {userCards.length > 0 ? (
+            <>
+              {!selectedUser ? (
+                <>
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/45">Who's watching?</p>
@@ -722,18 +814,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                           )}
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                          {users.map((user) => {
-                            const isActiveCard = selectedUserId === user.id
-                            const avatarUrl = buildAvatarUrl(user, 200)
-                            const initials = user.displayName
-                              .split(" ")
-                              .filter(Boolean)
-                              .map((part) => part[0]?.toUpperCase())
-                              .join("")
-                              .slice(0, 2) || "?"
+                    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                      {userCards.map((user) => {
+                          const isActiveCard = selectedUserId === user.id
+                          const avatarUrl = buildAvatarUrl(user, 200)
 
-                            return (
+                          return (
                               <button
                                 key={user.id}
                                 type="button"
@@ -745,19 +831,14 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                                 }`}
                                 aria-pressed={isActiveCard}
                               >
-                                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/60">
-                                  {avatarUrl ? (
-                                    <Image
-                                      src="/user.png"
-                                      alt={user.displayName || "User avatar"}
-                                      width={80}
-                                      height={80}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <span className="text-xl font-semibold text-white/85">{initials}</span>
-                                  )}
-                                </div>
+                              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/60">
+                                <AvatarImage
+                                  src={avatarUrl}
+                                  alt={user.displayName || "User avatar"}
+                                  size={80}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
                                 <div className="flex flex-col items-center gap-1">
                                   <span className="text-sm font-semibold text-white">{user.displayName}</span>
                                   {/* <span className="text-[10px] uppercase tracking-[0.35em] text-white/45">{user.folder}</span> */}
@@ -793,29 +874,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
 
                         <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
                           <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-black/55">
-                            {(() => {
-                              const avatar = buildAvatarUrl(selectedUser, 240)
-                              if (avatar) {
-                                return (
-                                  <Image
-                                    src="/user.png"
-                                    alt={selectedUser.displayName}
-                                    width={96}
-                                    height={96}
-                                    className="h-full w-full object-cover"
-                                  />
-                                )
-                              }
-
-                              const initials = selectedUser.displayName
-                                .split(" ")
-                                .filter(Boolean)
-                                .map((part) => part[0]?.toUpperCase())
-                                .join("")
-                                .slice(0, 2) || "?"
-
-                              return <span className="text-2xl font-semibold text-white/85">{initials}</span>
-                            })()}
+                            <AvatarImage
+                              src={buildAvatarUrl(selectedUser, 240)}
+                              alt={selectedUser.displayName}
+                              size={96}
+                              className="h-full w-full object-cover"
+                            />
                           </div>
                           <div className="flex flex-col items-center gap-1.5 sm:items-start">
                             <span className="text-xs font-semibold uppercase tracking-[0.3em] text-white/55">กำลังปลดล็อก</span>
@@ -945,17 +1009,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                     <>
                       <div className="flex flex-wrap items-center gap-4">
                         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-black/50 shadow-inner shadow-black/40">
-                          {activeUserAvatarUrl ? (
-                            <Image
-                              src="/user.png"
-                              alt={resolvedActiveUser.displayName}
-                              width={56}
-                              height={56}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-lg font-semibold text-white/80">{activeUserInitials}</span>
-                          )}
+                          <AvatarImage
+                            src={activeUserAvatarUrl}
+                            alt={resolvedActiveUser.displayName}
+                            size={56}
+                            className="h-full w-full object-cover"
+                          />
                         </div>
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
@@ -974,6 +1033,23 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                             สร้างผู้ใช้
                           </Link>
                         )}
+                        <input
+                          ref={avatarInputRef}
+                          id="avatar-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleAvatarUpload}
+                          disabled={isUploadingAvatar}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => avatarInputRef.current?.click()}
+                          className="rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-cyan-50 disabled:cursor-not-allowed disabled:border-cyan-400/30 disabled:text-cyan-200/60"
+                          disabled={isUploadingAvatar}
+                        >
+                          {isUploadingAvatar ? "กำลังอัปโหลด..." : "เปลี่ยนรูปโปรไฟล์"}
+                        </button>
                         <button
                           type="button"
                           onClick={handleOpenResetPinDialog}
@@ -997,6 +1073,12 @@ const Home: NextPage<HomeProps> = ({ images, users, activeUser }) => {
                           {isLoggingOut ? "กำลังออกจากระบบ..." : "ออกจากระบบ"}
                         </button>
                       </div>
+                      {avatarUploadError && (
+                        <p className="mt-3 text-xs text-red-300">{avatarUploadError}</p>
+                      )}
+                      {avatarUploadSuccess && (
+                        <p className="mt-3 text-xs text-emerald-300">{avatarUploadSuccess}</p>
+                      )}
                     </>
                   ) : (
                     <div className="flex flex-col gap-3">
