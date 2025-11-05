@@ -155,6 +155,13 @@ const Home: NextPage<HomeProps> = ({
 
   type LayoutKey = "row" | "grid" | "flex" | "random";
 
+  type AlbumPhotoStat = {
+    key: string;
+    label: string;
+    count: number;
+    formattedCount: string;
+  };
+
   const layoutSizeClasses: Record<
     LayoutKey,
     {
@@ -226,9 +233,16 @@ const Home: NextPage<HomeProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
-  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(
-    null
-  );
+  type PendingUploadItem = {
+    id: string;
+    file: File;
+    previewUrl: string;
+  };
+
+  const MAX_UPLOADS_PER_BATCH = 10;
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+  const [pendingUploads, setPendingUploads] = useState<PendingUploadItem[]>([]);
   const [uploadImageName, setUploadImageName] = useState("");
   const [uploadAlbum, setUploadAlbum] = useState("");
   const [selectedAlbumKeyOverride, setSelectedAlbumKeyOverride] =
@@ -552,6 +566,39 @@ const Home: NextPage<HomeProps> = ({
     [albumOptions]
   );
 
+  const albumPhotoStats = useMemo<AlbumPhotoStat[]>(() => {
+    const counts = new Map<string, AlbumPhotoStat>();
+
+    imageData.forEach((image) => {
+      const key = getAlbumKey(image.album);
+      const label =
+        key === fallbackAlbumKey
+          ? fallbackAlbumLabel
+          : (image.album ?? "").trim() || fallbackAlbumLabel;
+
+      const existing = counts.get(key);
+      if (existing) {
+        const updatedCount = existing.count + 1;
+        counts.set(key, {
+          ...existing,
+          count: updatedCount,
+          formattedCount: `${updatedCount.toLocaleString("th-TH")} รูป`,
+        });
+      } else {
+        counts.set(key, {
+          key,
+          label,
+          count: 1,
+          formattedCount: `${(1).toLocaleString("th-TH")} รูป`,
+        });
+      }
+    });
+
+    return Array.from(counts.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "th")
+    );
+  }, [fallbackAlbumKey, fallbackAlbumLabel, imageData]);
+
   const resolvedAlbumSelectValue = useMemo(() => {
     if (selectedAlbumKeyOverride !== null) {
       return selectedAlbumKeyOverride;
@@ -648,8 +695,28 @@ const Home: NextPage<HomeProps> = ({
   const currentPhoto =
     imageData.find((img) => img.id === Number(photoId)) || null;
 
+  const uploadIdCounterRef = useRef(0);
+
+  const pendingUploadsRef = useRef<PendingUploadItem[]>([]);
+
+  useEffect(() => {
+    pendingUploadsRef.current = pendingUploads;
+  }, [pendingUploads]);
+
+  useEffect(() => {
+    return () => {
+      pendingUploadsRef.current.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl)
+      );
+    };
+  }, []);
+
   const resetUploadForm = () => {
-    setSelectedUploadFile(null);
+    pendingUploadsRef.current.forEach((item) =>
+      URL.revokeObjectURL(item.previewUrl)
+    );
+    pendingUploadsRef.current = [];
+    setPendingUploads([]);
     setUploadImageName("");
     setUploadAlbum("");
     setUploadDescription("");
@@ -660,18 +727,67 @@ const Home: NextPage<HomeProps> = ({
   };
 
   const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    setSelectedUploadFile(file);
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) {
+      return;
+    }
+
     setUploadError(null);
     setUploadSuccess(null);
 
-    if (file) {
-      const suggestedName = file.name.replace(/\.[^.]+$/, "");
-      setUploadImageName((prev) =>
-        prev.trim().length > 0 ? prev : suggestedName
-      );
-    } else {
+    const remainingSlots = MAX_UPLOADS_PER_BATCH - pendingUploads.length;
+    if (remainingSlots <= 0) {
+      setUploadError(`เลือกได้สูงสุด ${MAX_UPLOADS_PER_BATCH} รูปต่อครั้ง`);
+      if (uploadInputRef.current) {
+        uploadInputRef.current.value = "";
+      }
+      return;
+    }
+
+    const acceptedItems: PendingUploadItem[] = [];
+    let encounteredError: string | null = null;
+
+    for (const file of files) {
+      if (acceptedItems.length >= remainingSlots) {
+        encounteredError = `เพิ่มได้สูงสุด ${MAX_UPLOADS_PER_BATCH} รูปต่อชุดอัปโหลด`;
+        break;
+      }
+
+      if (!file.type.startsWith("image/")) {
+        encounteredError = "รองรับเฉพาะไฟล์รูปภาพเท่านั้น";
+        continue;
+      }
+
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        encounteredError = "ไฟล์มีขนาดเกิน 10MB กรุณาเลือกไฟล์ที่เล็กกว่า";
+        continue;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      const id = `pending-${uploadIdCounterRef.current++}`;
+      acceptedItems.push({ id, file, previewUrl });
+    }
+
+    if (acceptedItems.length > 0) {
+      setPendingUploads((prev) => [...prev, ...acceptedItems]);
+
+      const firstNewFile = acceptedItems[0]?.file;
+      if (firstNewFile) {
+        const suggestedName = firstNewFile.name.replace(/\.[^.]+$/, "");
+        setUploadImageName((prev) =>
+          prev.trim().length > 0 ? prev : suggestedName
+        );
+      }
+    } else if (!pendingUploads.length) {
       setUploadImageName("");
+    }
+
+    if (encounteredError) {
+      setUploadError(encounteredError);
+    }
+
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = "";
     }
   };
 
@@ -708,7 +824,19 @@ const Home: NextPage<HomeProps> = ({
     setUploadAlbum(selectedOption.label);
   };
 
-  const handleClearSelectedFile = () => {
+  const handleRemovePendingUpload = (id: string) => {
+    setPendingUploads((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      const next = prev.filter((item) => item.id !== id);
+      pendingUploadsRef.current = next;
+      return next;
+    });
+  };
+
+  const handleClearPendingUploads = () => {
     resetUploadForm();
     setUploadError(null);
     setUploadSuccess(null);
@@ -722,7 +850,7 @@ const Home: NextPage<HomeProps> = ({
       return;
     }
 
-    if (!selectedUploadFile) {
+    if (pendingUploads.length === 0) {
       setUploadError("กรุณาเลือกไฟล์รูปภาพก่อน");
       return;
     }
@@ -736,7 +864,15 @@ const Home: NextPage<HomeProps> = ({
       return;
     }
 
-    if (selectedUploadFile.size > 10 * 1024 * 1024) {
+    if (pendingUploads.length > MAX_UPLOADS_PER_BATCH) {
+      setUploadError(`เลือกได้สูงสุด ${MAX_UPLOADS_PER_BATCH} รูปต่อครั้ง`);
+      return;
+    }
+
+    const oversizedFile = pendingUploads.find(
+      (item) => item.file.size > MAX_FILE_SIZE_BYTES
+    );
+    if (oversizedFile) {
       setUploadError("ไฟล์มีขนาดเกิน 10MB กรุณาเลือกไฟล์ที่เล็กกว่า");
       return;
     }
@@ -745,25 +881,36 @@ const Home: NextPage<HomeProps> = ({
     setUploadError(null);
     setUploadSuccess(null);
 
-    const readFileAsDataUrl = () =>
+    const readFileAsDataUrl = (file: File) =>
       new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () =>
-          reject(new Error("ไม่สามารถอ่านไฟล์ที่เลือกได้"));
-        reader.readAsDataURL(selectedUploadFile);
+        reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์ที่เลือกได้"));
+        reader.readAsDataURL(file);
       });
 
     try {
-      const base64File = await readFileAsDataUrl();
+      const uploadPayload = await Promise.all(
+        pendingUploads.map(async (item, index) => {
+          const base64File = await readFileAsDataUrl(item.file);
+          const imageName =
+            pendingUploads.length === 1
+              ? imageNameValue
+              : `${imageNameValue} (${index + 1})`;
+
+          return {
+            file: base64File,
+            imageName,
+            album: albumValue,
+            description: descriptionValue,
+          };
+        })
+      );
 
       const res = await fetch("/api/upload", {
         method: "POST",
         body: JSON.stringify({
-          file: base64File,
-          imageName: imageNameValue,
-          album: albumValue,
-          description: descriptionValue,
+          files: uploadPayload,
         }),
         headers: { "Content-Type": "application/json" },
       });
@@ -775,8 +922,22 @@ const Home: NextPage<HomeProps> = ({
         throw new Error(errorData.error || "ไม่สามารถอัปโหลดรูปภาพได้");
       }
 
+      const responseData = await res.json().catch(() => null);
+
       await router.replace(router.asPath);
-      setUploadSuccess(`อัปโหลด "${imageNameValue}" เรียบร้อยแล้ว`);
+      const successCount = pendingUploads.length;
+      const successMessage =
+        successCount > 1
+          ? `อัปโหลดรูป ${successCount} รูปเรียบร้อยแล้ว`
+          : `อัปโหลด "${imageNameValue}" เรียบร้อยแล้ว`;
+
+      if (responseData?.results?.length) {
+        setUploadSuccess(
+          `อัปโหลดรูป ${responseData.results.length} รูปเรียบร้อยแล้ว`
+        );
+      } else {
+        setUploadSuccess(successMessage);
+      }
       resetUploadForm();
     } catch (error: any) {
       console.error(error);
@@ -787,16 +948,9 @@ const Home: NextPage<HomeProps> = ({
   };
 
   useEffect(() => {
-    setSelectedUploadFile(null);
-    setUploadImageName("");
-    setUploadAlbum("");
-    setUploadDescription("");
+    resetUploadForm();
     setUploadSuccess(null);
     setUploadError(null);
-    setSelectedAlbumKeyOverride(null);
-    if (uploadInputRef.current) {
-      uploadInputRef.current.value = "";
-    }
   }, [resolvedActiveUser?.id]);
 
   const handleAvatarUpload = async (
@@ -1550,6 +1704,24 @@ const Home: NextPage<HomeProps> = ({
                     </dd>
                   </div>
                 </dl>
+                {albumPhotoStats.length > 0 && (
+                  <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 shadow-inner shadow-black/25">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+                      หมวดไหนมีกี่อัน
+                    </h2>
+                    <ul className="mt-3 grid gap-2 text-sm text-white/80 sm:grid-cols-2">
+                      {albumPhotoStats.map(({ key, label, formattedCount }) => (
+                        <li
+                          key={key}
+                          className="flex items-center justify-between rounded-lg border border-white/5 bg-black/20 px-3 py-2"
+                        >
+                          <span className="font-medium text-white">{label}</span>
+                          <span className="text-white/70">{formattedCount}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="relative isolate overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/15 via-white/5 to-white/[0.02] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.45)]">
@@ -1650,6 +1822,7 @@ const Home: NextPage<HomeProps> = ({
                         type="file"
                         id="file-upload"
                         accept="image/*"
+                        multiple
                         onChange={handleFileSelection}
                         disabled={isUploading || !resolvedActiveUser}
                         className="sr-only"
@@ -1663,12 +1836,14 @@ const Home: NextPage<HomeProps> = ({
                         }`}
                         aria-disabled={isUploading || !resolvedActiveUser}
                       >
-                        {selectedUploadFile ? "เปลี่ยนไฟล์ภาพ" : "เลือกไฟล์ภาพ"}
+                        {pendingUploads.length > 0
+                          ? "เพิ่มรูปภาพเพิ่มเติม"
+                          : "เลือกไฟล์ภาพ"}
                       </label>
-                      {selectedUploadFile && (
+                      {pendingUploads.length > 0 && (
                         <button
                           type="button"
-                          onClick={handleClearSelectedFile}
+                          onClick={handleClearPendingUploads}
                           className="rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-white/40 hover:text-white"
                           disabled={isUploading}
                         >
@@ -1677,14 +1852,23 @@ const Home: NextPage<HomeProps> = ({
                       )}
                     </div>
                     <div className="text-xs text-white/60">
-                      {selectedUploadFile ? (
+                      {pendingUploads.length > 0 ? (
                         <>
-                          <p>ไฟล์ที่เลือก: {selectedUploadFile.name}</p>
                           <p>
-                            ขนาดไฟล์:{" "}
-                            {(selectedUploadFile.size / 1024 / 1024).toFixed(2)}{" "}
-                            MB (จำกัดไม่เกิน 10MB)
+                            เลือกแล้ว {pendingUploads.length} รูป (สูงสุด {MAX_UPLOADS_PER_BATCH} รูปต่อครั้ง)
                           </p>
+                          <ul className="mt-2 space-y-1 text-white/70">
+                            {pendingUploads.map((item) => (
+                              <li key={item.id} className="flex items-center justify-between gap-3">
+                                <span className="truncate text-white/80">
+                                  {item.file.name}
+                                </span>
+                                <span className="whitespace-nowrap text-white/50">
+                                  {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
                         </>
                       ) : (
                         <p>รองรับไฟล์ JPG, PNG และ WEBP ขนาดไม่เกิน 10MB</p>
@@ -1700,6 +1884,43 @@ const Home: NextPage<HomeProps> = ({
                       )}
                     </div>
                   </div>
+
+                  {pendingUploads.length > 0 && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {pendingUploads.map((item, index) => (
+                        <div
+                          key={item.id}
+                          className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40 shadow-inner shadow-black/40"
+                        >
+                          <div className="relative h-40 w-full bg-black/50">
+                            <img
+                              src={item.previewUrl}
+                              alt={`ตัวอย่างรูปที่ ${index + 1}`}
+                              className="h-full w-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePendingUpload(item.id)}
+                              disabled={isUploading}
+                              className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white/80 shadow-md transition hover:bg-black/90"
+                            >
+                              ลบรูปนี้
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between px-3 py-2 text-xs text-white/70">
+                            <span className="truncate font-medium text-white">
+                              {pendingUploads.length === 1
+                                ? uploadImageName || item.file.name
+                                : `${uploadImageName || "รูป"} (${index + 1})`}
+                            </span>
+                            <span className="whitespace-nowrap">
+                              {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
