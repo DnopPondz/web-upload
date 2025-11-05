@@ -9,7 +9,7 @@ const MAX_UPLOADS_PER_BATCH = 10
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "20mb", // ✅ อนุญาตอัปโหลดได้ถึง 20MB (ปรับได้ตามต้องการ)
+      sizeLimit: "100mb", // ✅ อนุญาตอัปโหลดได้ถึง 20MB (ปรับได้ตามต้องการ)
     },
   },
 }
